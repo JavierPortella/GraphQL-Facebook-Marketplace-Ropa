@@ -1,0 +1,5 @@
+# IDEs and editors
+.ipynb_checkpoints
+
+# Environment File
+.env
