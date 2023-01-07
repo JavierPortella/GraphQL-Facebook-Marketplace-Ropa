@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
-import json
+from json import loads, JSONDecodeError
+from os import _exit, getenv, makedirs, path
 from time import localtime, sleep, strftime, time
-import os
 
 from dotenv import load_dotenv
 from openpyxl import load_workbook
@@ -83,15 +83,15 @@ class ScraperFb:
         password = self.wait.until(EC.presence_of_element_located((By.ID, "pass")))
         username.clear()
         password.clear()
-        username.send_keys(os.getenv('FB_USERNAME'))
-        password.send_keys(os.getenv('FB_PASSWORD'))
+        username.send_keys(getenv('FB_USERNAME'))
+        password.send_keys(getenv('FB_PASSWORD'))
         self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[name='login']"))).click()
     
-    def mapear_datos(self):
+    def mapear_datos(self, url):
         sleep(10)
         self.driver.execute_script("window.open('about:blank', 'newtab');")
         self.driver.switch_to.window("newtab")
-        self.driver.get("https://www.facebook.com/marketplace/category/apparel/?sortBy=creation_time_descend&exact=false")
+        self.driver.get(url)
         
         sleep(8)        
         ropa = self.driver.find_elements(By.XPATH, '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]')
@@ -103,14 +103,14 @@ class ScraperFb:
             print("Scrapeando item", i + 1)
             try:
                 ropa[i].click()
-                sleep(3)
+                sleep(5)
                 for request in self.driver.requests:
                     if not request.response or 'graphql' not in request.url:
                         continue
                     
                     body = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
                     decoded_body = body.decode('utf-8')
-                    json_data = json.loads(decoded_body)
+                    json_data = loads(decoded_body)
                     
                     if 'prefetch_uris_v2' not in json_data['extensions']:
                         continue
@@ -124,7 +124,7 @@ class ScraperFb:
                     break
                 self.driver.execute_script("window.history.go(-1)");
                 
-            except (NoSuchElementException, StaleElementReferenceException) as error:
+            except (NoSuchElementException, JSONDecodeError, StaleElementReferenceException) as error:
                 print("Error:",error)
                 print('No se hallo el item N '+str(i + 1)+'se pasará al siguiente')
                 e=e+1
@@ -139,7 +139,7 @@ class ScraperFb:
                 print("Error:", error)
                 e = e + 1
                 self.guardar_datos()
-                os._exit(os.EX_OK)
+                _exit(0)
             i = i + 1
             if i == len(ropa):
                 self.driver.execute_script('window.scrollTo(0, document.body.scrollHeight)')
@@ -147,8 +147,6 @@ class ScraperFb:
                 ropa = self.driver.find_elements(By.XPATH, '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]')
             del self.driver.requests
             sleep(3)
-            if i == 4:
-                break
             print('-------------------------------------------------------------------')
         fb_mkp_ropa_time["Cantidad"]= i - e
         print("Se halló", e, "errores")
@@ -159,36 +157,40 @@ class ScraperFb:
     def extraer_datos(self, item, fecha_extraccion):
         fb_mkp_ropa["titulo_marketplace"].append(item['target'].get('marketplace_listing_title'))
         fb_mkp_ropa["tiempo_creacion"].append(item['target'].get('creation_time'))
+        fb_mkp_ropa["disponible"].append(item['target'].get('is_live'))
+        fb_mkp_ropa["vendido"].append(item['target'].get('is_sold'))
+        fb_mkp_ropa["cantidad"].append(item['target'].get('listing_inventory_type'))
+        fb_mkp_ropa["name_vendedor"].append(item['target'].get('story').get('actors')[0].get('name'))
+        fb_mkp_ropa["tipo_vendedor"].append(item['target'].get('story').get('actors')[0]['__typename'])
+        fb_mkp_ropa["id_vendedor"].append(item['target'].get('story').get('actors')[0]['id'])
+        fb_mkp_ropa["locacion_id"].append(item['target'].get('location_vanity_or_id'))
+        fb_mkp_ropa["latitud"].append(item['target'].get('location', {}).get('latitude'))
+        fb_mkp_ropa["longitud"].append(item['target'].get('location', {}).get('longitude'))
+        fb_mkp_ropa["precio"].append(item['target'].get('listing_price', {}).get('amount'))
+        fb_mkp_ropa["tipo_moneda"].append(item['target'].get('listing_price', {}).get('currency'))
+        fb_mkp_ropa["amount_with_concurrency"].append(item['target'].get('listing_price', {}).get('amount_with_offset_in_currency'))
         fb_mkp_ropa["tipo_delivery"].append(item['target'].get('delivery_types', [None])[0])
         fb_mkp_ropa["delivery_data"].append(item['target'].get("delivery_data", {}).get('carrier'))
         fb_mkp_ropa["delivery_direccion"].append(item['target'].get("delivery_data", {}).get('delivery_address'))
         fb_mkp_ropa["descripcion"].append(item['target'].get('redacted_description', {}).get('text'))
-        fb_mkp_ropa["disponible"].append(item['target'].get('is_live'))
-        fb_mkp_ropa["vendido"].append(item['target'].get('is_sold'))
-        fb_mkp_ropa["fecha_union_vendedor"].append(item['target'].get('marketplace_listing_seller', {}).get('join_time'))
-        fb_mkp_ropa["cantidad"].append(item['target'].get('listing_inventory_type'))
-        fb_mkp_ropa["precio"].append(item['target'].get('listing_price', {}).get('amount'))
-        fb_mkp_ropa["tipo_moneda"].append(item['target'].get('listing_price', {}).get('currency'))
-        fb_mkp_ropa["amount_with_concurrency"].append(item['target'].get('listing_price', {}).get('amount_with_offset_in_currency'))
-        fb_mkp_ropa["latitud"].append(item['target'].get('location', {}).get('latitude'))
-        fb_mkp_ropa["longitud"].append(item['target'].get('location', {}).get('longitude'))
-        fb_mkp_ropa["locacion_id"].append(item['target'].get('location_vanity_or_id'))
-        fb_mkp_ropa["name_vendedor"].append(item['target'].get('story', {}).get('actors', [{}])[0].get('name'))
-        fb_mkp_ropa["tipo_vendedor"].append(item['target'].get('story', {}).get('actors', [{}])[0]['__typename'])
-        fb_mkp_ropa["id_vendedor"].append(item['target'].get('story', {}).get('actors', [{}])[0]['id'])
-        fb_mkp_ropa["locacion"].append(item['target'].get('location_text', {}).get('text'))
+        fb_mkp_ropa["fecha_union_vendedor"].append(item['target'].get('marketplace_listing_seller', {}).get('join_time'))  
+        data = item['target'].get('location_text', {})
+        if data:
+            data = data.get('text')
+        fb_mkp_ropa["locacion"].append(data)
         fb_mkp_ropa["Fecha Extraccion"].append(fecha_extraccion)
-        
+    
     def guardar_datos(self):
         df_fb_mkp_ropa = pd.DataFrame(fb_mkp_ropa)
         df_fb_mkp_ropa.drop(len(df_fb_mkp_ropa)-1, axis=0, inplace=True)
         fb_mkp_ropa_time["Cantidad"] = len(df_fb_mkp_ropa)
         datetime_obj = datetime.strptime(fb_mkp_ropa_time["Fecha"],"%d/%m/%Y")
-        path = "Data/" + datetime_obj.strftime('%d-%m-%Y') + "/"
+        filepath = "Data/" + datetime_obj.strftime('%d-%m-%Y') + "/"
         filename = "fb_ropa_" + datetime_obj.strftime('%d%m%Y') + "_" + str(fb_mkp_ropa_time["Cantidad"]) + ".xlsx"
-        if not os.path.exists(path):
-            os.makedirs(path)
-        df_fb_mkp_ropa.to_excel(path + filename, index = False)
+        if not path.exists(filepath):
+            makedirs(filepath)
+        df_fb_mkp_ropa.to_excel(filepath + filename, index = False)
+        print("Datos Guardados Correctamente")
         
     def guardar_tiempos(self, filename, sheet_name):
         tiempos = load_workbook(filename)
@@ -202,8 +204,10 @@ class ScraperFb:
         worksheet.append(list(fb_mkp_ropa_time.values()))
         tiempos.save(filename)
         tiempos.close()
+        print("Tiempos Guardados Correctamente")
 
 def set_params_inicio():
+    print("Estableciendo parámetros de inicio")
     fb_mkp_ropa_time["Fecha"] = (datetime.now().date() - timedelta(days=1)).strftime('%d/%m/%Y')
     start = time()
     fb_mkp_ropa_time["Hora Inicio"] = strftime("%H:%M:%S", localtime(start))
@@ -211,6 +215,7 @@ def set_params_inicio():
     return start
 
 def set_params_final(start):
+    print("Estableciendo parámetros finales")
     end = time()
     fb_mkp_ropa_time["Hora Termino"] = strftime("%H:%M:%S", localtime(end))
     print("Hora Termino:",fb_mkp_ropa_time["Hora Termino"])
@@ -220,17 +225,23 @@ def set_params_final(start):
     fb_mkp_ropa_time["Productos/min"] = int(fb_mkp_ropa_time["Cantidad"]/(total / 60))
 
 def main():
-    start = set_params_inicio()
+    # Cargar variables de entorno
     load_dotenv()
     
+    # Estabbleciendo hora y fecha de inicio de la extracción
+    start = set_params_inicio()
+    
+    # Url base a scrapear
     url_base = 'https://www.facebook.com/'
+    url_ropa = '"https://www.facebook.com/marketplace/category/apparel/?sortBy=creation_time_descend&exact=false"'
     
     # Parámetros para guardar la medición de la ejecución del scraper
     filename_tiempos = 'Tiempos.xlsx'
     sheet_tiempos = "Ropa"
+    
     scraper = ScraperFb()
     scraper.iniciar_sesion(url_base)
-    scraper.mapear_datos()
+    scraper.mapear_datos(url_ropa)
     scraper.guardar_datos()
     
     set_params_final(start)
