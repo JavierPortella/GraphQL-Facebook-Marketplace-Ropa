@@ -3,3 +3,6 @@
 
 # Environment File
 .env
+
+# Critical Data
+/Data
