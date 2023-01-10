@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from json import loads, JSONDecodeError
 from logging import basicConfig, CRITICAL ,ERROR, getLogger, INFO, log
-from os import _exit, getenv, makedirs, path
+from os import getenv, makedirs, path
 from re import findall
 from time import localtime, sleep, strftime, time
 from traceback import TracebackException
@@ -51,8 +51,6 @@ class Dataset:
             "titulo_marketplace": [],
             "tiempo_creacion": [],
             "tipo_delivery": [],
-            "delivery_data": [],
-            "delivery_direccion": [],
             "descripcion": [],
             "disponible": [],
             "vendido": [],
@@ -90,8 +88,6 @@ class Dataset:
         self._dataset["tipo_moneda"].append(item.get('listing_price', {}).get('currency'))
         self._dataset["amount_with_concurrency"].append(item.get('listing_price', {}).get('amount_with_offset_in_currency'))
         self._dataset["tipo_delivery"].append(item.get('delivery_types', [None])[0])
-        self._dataset["delivery_data"].append(item.get("delivery_data", {}).get('carrier'))
-        self._dataset["delivery_direccion"].append(item.get("delivery_data", {}).get('delivery_address'))
         self._dataset["descripcion"].append(item.get('redacted_description', {}).get('text'))
         self._dataset["fecha_union_vendedor"].append(item.get('marketplace_listing_seller', {}).get('join_time'))  
         data = item.get('location_text', {})
