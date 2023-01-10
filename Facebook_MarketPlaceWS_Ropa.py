@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from json import loads, JSONDecodeError
-from logging import basicConfig, ERROR, INFO, log
+from logging import basicConfig, CRITICAL ,ERROR, getLogger, INFO, log
 from os import _exit, getenv, makedirs, path
 from re import findall
 from time import localtime, sleep, strftime, time
@@ -14,8 +14,10 @@ from seleniumwire.utils import decode
 from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException, ElementNotInteractableException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.remote_connection import LOGGER as seleniumLogger
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from urllib3.connectionpool import log as urllibLogger
 from webdriver_manager.chrome import ChromeDriverManager
 
 class Errores:
@@ -97,7 +99,7 @@ class Dataset:
             data = data.get('text')
         self._dataset["locacion"].append(data)
         self._dataset["Fecha Extraccion"].append(fecha_extraccion)
-        self._dataset["enlace"] = enlace
+        self._dataset["enlace"].append(enlace)
 
 class Tiempo:
     def __init__(self, start):
@@ -109,7 +111,6 @@ class Tiempo:
         self._tiempo = None
         self._productos_por_min = None
         self._enlace = None
-        self._observaciones = None
         self._errores = None
         
     def _get_fecha(self):
@@ -131,7 +132,7 @@ class Tiempo:
         log(INFO, f"Hora Fin: {self._hora_fin}")
         total = end - start
         self._tiempo = str(timedelta(seconds=total)).split(".")[0]
-        self._productos_por_min = int(self._cantidad /(total / 60))
+        self._productos_por_min = int(round(self._cantidad /(total / 60),0))
 
 class ScraperFb:
     """Representa a un bot para hacer web scarping en fb marketplace.
@@ -202,12 +203,11 @@ class ScraperFb:
             log(INFO, f"Scrapeando item {i + 1}")
             
             try:
-                enlace = findall("(.*)\/\?", ropa[i].find_element(By.XPATH, ".//ancestor::a").get_attribute('href'))[0]
-            except NoSuchElementException as error:
-                enlace = None
-                self._errores._append_error(error, enlace)
-            
-            try:
+                try:
+                    enlace = findall("(.*)\/\?", ropa[i].find_element(By.XPATH, ".//ancestor::a").get_attribute('href'))[0]
+                except NoSuchElementException as error:
+                    enlace = None
+                    self._errores._append_error(error, enlace)
                 ropa[i].click()
                 sleep(5)
                 for request in self.driver.requests:
@@ -222,11 +222,11 @@ class ScraperFb:
                         continue
 
                     fecha_publicacion = json_data['data']['viewer']['marketplace_product_details_page']['target']['creation_time']
-                    #if fecha_publicacion < fecha_flag:
-                    dato = json_data['data']['viewer']['marketplace_product_details_page']["target"]
-                    log(INFO, f"{dato['marketplace_listing_title']}")
-                    self._data._append_data(dato, self._tiempo._get_fecha(), enlace)
-                    log(INFO, f"Item {i + 1} scrapeado con éxito")
+                    if fecha_publicacion < fecha_flag:
+                        dato = json_data['data']['viewer']['marketplace_product_details_page']["target"]
+                        log(INFO, f"{dato['marketplace_listing_title']}")
+                        self._data._append_data(dato, self._tiempo._get_fecha(), enlace)
+                        log(INFO, f"Item {i + 1} scrapeado con éxito")
                     break
                 self.driver.execute_script("window.history.go(-1)");
                 
@@ -242,16 +242,14 @@ class ScraperFb:
             except Exception as error:
                 self._errores._append_error(error, enlace)
                 e = e + 1
-                print(error)
-                self.guardar_datos(self._errores._get_errores())
-                _exit(0)
+                log(CRITICAL, "Se detuvo inesperadamente el programa")
+                log(CRITICAL, f"Causa:\n{error}")
+                break
             i = i + 1
             if i == len(ropa):
                 self.driver.execute_script('window.scrollTo(0, document.body.scrollHeight)')
                 sleep(7)
                 ropa = self.driver.find_elements(By.XPATH, '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]')
-            if i == 5:
-                break
             
             del self.driver.requests
             log(INFO, "-------------------------------------------------------------------")
@@ -296,9 +294,17 @@ class ScraperFb:
         tiempos.close()
         log(INFO, "Tiempos Guardados Correctamente")
 
+def config_log():
+    seleniumLogger.setLevel(ERROR)
+    urllibLogger.setLevel(ERROR)
+    urllibLogger.propagate = False
+    logger = getLogger('seleniumwire')
+    logger.setLevel(ERROR)
+    basicConfig(format='%(asctime)s %(message)s', level=INFO)
+
 def main():
     # Formato para el debugger
-    basicConfig(format='%(asctime)s %(message)s')
+    config_log()
     log(INFO, "Configurando Formato Básico del Debugger")
     
     # Cargar variables de entorno
