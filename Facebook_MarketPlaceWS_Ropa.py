@@ -368,6 +368,14 @@ def config_log():
     basicConfig(format="%(asctime)s %(message)s", level=INFO)
 
 
+def validar_parametros(parametros):
+    for parametro in parametros:
+        if not parametro:
+            log(ERROR, f"Parámetros incorrectos")
+            return False
+    log(INFO, "Parámetros válidos")
+
+
 def main():
     # Formato para el debugger
     log(INFO, "Configurando Formato Básico del Debugger")
@@ -395,8 +403,28 @@ def main():
     error_filename = getenv("ERROR_FILENAME")
     error_folder = getenv("ERROR_FOLDER")
 
+    # Validar parámetros
+    if not validar_parametros(
+        [
+            url_base,
+            url_ropa,
+            data_filename,
+            data_folder,
+            filename_tiempos,
+            sheet_tiempos,
+            error_filename,
+            error_folder,
+        ]
+    ):
+        return
+
+    # Inicializar scrapper
     scraper = ScraperFb(start)
+
+    # Iniciar sesión
     scraper.iniciar_sesion(url_base)
+
+    # Extracción de datos
     scraper.mapear_datos(url_ropa)
 
     # Guardando la data extraída por el scraper
@@ -411,7 +439,6 @@ def main():
 
     # Guardando los tiempos durante la ejecución del scraper
     scraper.guardar_tiempos(filename_tiempos, sheet_tiempos, start)
-
     log(INFO, "Programa ejecutado satisfactoriamente")
 
 
