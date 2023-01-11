@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from json import loads, JSONDecodeError
-from logging import basicConfig, CRITICAL, ERROR, getLogger, INFO, log
+from logging import basicConfig, CRITICAL, ERROR, getLogger, INFO, log, StreamHandler
 from os import getenv, makedirs, path
 from re import findall
 from time import localtime, sleep, strftime, time
@@ -26,7 +26,26 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 class Errores:
+    """
+    Representa a los errores ocurridos durante la ejecución de un scraper
+
+    ...
+
+    Attributes
+    ----------
+    errores : dict
+        Conjunto de datos que contiene toda información de los errores ocurridos durante la ejecución del scraper
+
+    Methods
+    -------
+    agregar_error(error, enlace):
+        Agrega la información de un error al diccionario de datos errores
+    """
+
     def __init__(self):
+        """
+        Genera todos los atributos para el objeto Errores
+        """
         self._errores = {
             "Clase": [],
             "Mensaje": [],
@@ -35,23 +54,57 @@ class Errores:
             "Publicacion": [],
         }
 
-    def _get_errores(self):
+    @property
+    def errores(self):
+        """Retorna el valor actual del diccionario de datos errores"""
         return self._errores
 
-    def _append_error(self, error, enlace):
+    def agregar_error(self, error, enlace):
+        """
+        Agrega la información de un error al diccionario de datos errores
+
+        Parameters
+        ----------
+        error: Exception
+            Objeto de tipo excepción ocurrida durante la ejecución del scraper
+        enlace: str
+            Enlace de la publicación de la página facebook marketplace
+
+        Returns
+        -------
+        None
+        """
+        log(ERROR, error)
         traceback_error = TracebackException.from_exception(error)
-        error_message = traceback_error._str
         error_stack = traceback_error.stack[0]
-        log(ERROR, error_message)
         self._errores["Clase"].append(traceback_error.exc_type)
-        self._errores["Mensaje"].append(error_message)
+        self._errores["Mensaje"].append(traceback_error._str)
         self._errores["Linea de Error"].append(error_stack.lineno)
         self._errores["Codigo Error"].append(error_stack.line)
         self._errores["Publicacion"].append(enlace)
 
 
 class Dataset:
+    """
+    Representa al conjunto de datos generado por el scraper
+
+    ...
+
+    Attributes
+    ----------
+    dataset : dict
+        Conjunto de datos que contiene toda información extraída de una categoría de la página de facebook marketplace
+
+    Methods
+    -------
+    agregar_data():
+        Agrega la información de una publicación al diccionario de datos dataset
+    """
+
     def __init__(self):
+        """
+        Genera todos los atributos para el objeto Dataset
+        """
         self._dataset = {
             "Fecha Extraccion": [],
             "titulo_marketplace": [],
@@ -75,10 +128,28 @@ class Dataset:
             "enlace": [],
         }
 
-    def _get_dataset(self):
+    @property
+    def dataset(self):
+        """Retorna el valor actual del diccionario de datos dataset"""
         return self._dataset
 
-    def _append_data(self, item, fecha_extraccion, enlace):
+    def agregar_data(self, item, fecha_extraccion, enlace):
+        """
+        Agrega la información de una publicación al dataset
+
+        Parameters
+        ----------
+        item: dict
+            Conjunto de datos que contiene toda la información de una publicación
+        fecha_extraccion: datetime
+            Fecha actual en la que se creó una publicación
+        enlace: str
+            Enlace de la publicación de la página facebook marketplace
+
+        Returns
+        -------
+        None
+        """
         self._dataset["titulo_marketplace"].append(
             item.get("marketplace_listing_title")
         )
@@ -119,40 +190,125 @@ class Dataset:
 
 
 class Tiempo:
-    def __init__(self, start):
-        self._hora_inicio = strftime("%H:%M:%S", localtime(start))
+    """
+    Representa el tiempo que se demora el scraper en extraer la información
+
+    ...
+
+    Attributes
+    ----------
+    start: float
+        Hora actual en segundos
+    hora_inicio : str
+        Hora de inicio de la ejecución del scraper en formato %H:%M:%S
+    fecha : str
+        Fecha de las publicaciones a extraer en formato %d/%m/%Y
+    hora_fin : str
+        Hora de término de la ejecución del scraper en formato %H:%M:%S
+    cantidad : int
+        Cantidad de publicaciones extraídas de la página de facebook marketplace
+    tiempo : str
+        Tiempo de ejecución del scraper en formato %d days, %H:%M:%S
+    productos_por_min : float
+        Cantidad de publicaciones que puede extraer el scraper en un minuto
+    num_error : int
+        Cantidad de errores ocurridos durante la ejecución del scraper
+
+    Methods
+    -------
+    set_param_final():
+        Establece los parámetros finales cuando se termina de ejecutar el scraper
+    """
+
+    def __init__(self):
+        """
+        Genera todos los atributos para el objeto Tiempo
+        """
+        self._start = time()
+        self._hora_inicio = strftime("%H:%M:%S", localtime(self._start))
         log(INFO, f"Hora de inicio: {self._hora_inicio}")
         self._fecha = (datetime.now().date() - timedelta(days=1)).strftime("%d/%m/%Y")
         self._hora_fin = None
         self._cantidad = None
         self._tiempo = None
         self._productos_por_min = None
-        self._enlace = None
-        self._errores = None
+        self._num_error = None
 
-    def _get_fecha(self):
+    @property
+    def cantidad(self):
+        """Retorna el valor actual o asigna un nuevo valor del atributo cantidad"""
+        return self._cantidad
+
+    @property
+    def fecha(self):
+        """Retorna el valor actual del atributo fecha"""
         return self._fecha
 
-    def _get_errores(self):
-        return self._errores
+    @property
+    def num_error(self):
+        """Retorna el valor actual o asigna un nuevo valor del atributo num_error"""
+        return self._num_error
 
-    def _set_cantidad(self, cantidad):
+    @cantidad.setter
+    def cantidad(self, cantidad):
         self._cantidad = cantidad
 
-    def _set_errores(self, errores):
-        self._errores = errores
+    @num_error.setter
+    def num_error(self, num_error):
+        self._num_error = num_error
 
-    def _set_param_final(self, start):
+    def set_param_final(self):
+        """
+        Establece parametros finales para medir el tiempo de ejecución del scraper
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
         end = time()
         self._hora_fin = strftime("%H:%M:%S", localtime(end))
         log(INFO, f"Productos Extraídos: {self._cantidad}")
         log(INFO, f"Hora Fin: {self._hora_fin}")
-        total = end - start
+        total = end - self._start
         self._tiempo = str(timedelta(seconds=total)).split(".")[0]
-        self._productos_por_min = int(round(self._cantidad / (total / 60), 0))
+        self._productos_por_min = round(self._cantidad / (total / 60), 2)
 
 
 class ScraperFb:
+    """
+    Representa a un bot para hacer web scraping en fb marketplace
+
+    ...
+
+    Attributes
+    ----------
+    tiempo : Tiempo
+        Objeto de la clase Tiempo que maneja información del tiempo de ejecución del scraper
+    driver: webdriver.Chrome
+        Objeto de la clase webdriver que maneja un navegador para hacer web scraping
+    wait : WebDriverWait
+        Objeto de la clase WebDriverWait que maneja el Tiempo de espera durante la ejecución del scraper
+    errores : Errores
+        Objeto de la clase Errores que maneja información de los errores ocurridos durante la ejecución del scraper
+    data : Dataset
+        Objeto de la clase Dataset que maneja información de las publicaciones extraídas por el scraper
+
+    Methods
+    -------
+    iniciar_sesion():
+        Iniciar sesión en facebook usando un usuario y contraseña
+    mapear_datos(url):
+        Mapea y extrae los datos de las publicaciones de una categoría
+    guardar_datos(dataset, filetype, folder, filename):
+        Guarda los datos o errores obtenidos durante la ejecución del scraper
+    guardar_tiempos(filename, sheet_name):
+        Guarda la información del tiempo de ejecución del scraper
+    """
+
     """Representa a un bot para hacer web scarping en fb marketplace.
 
     Attributes:
@@ -160,71 +316,90 @@ class ScraperFb:
         wait (Object): Maneja el Tiempo de espera durante la ejecución del bot
     """
 
-    def __init__(self, start):
-        """Inicializa un objeto de tipo ScraperFb.
-
-        Args:
-            driver (Object): [Driver]
-            wait (Object): [Wait]
+    def __init__(self):
+        """
+        Genera todos los atributos para el objeto ScraperFb
         """
         log(INFO, "Inicializando scraper")
-        self._tiempo = Tiempo(start)
+        self._tiempo = Tiempo()
         chrome_options = webdriver.ChromeOptions()
         prefs = {"profile.default_content_setting_values.notifications": 2}
         chrome_options.add_experimental_option("prefs", prefs)
-        self.driver = webdriver.Chrome(
+        self._driver = webdriver.Chrome(
             chrome_options=chrome_options,
             service=Service(ChromeDriverManager().install()),
         )
-        self.wait = WebDriverWait(self.driver, 10)
+        self._wait = WebDriverWait(self._driver, 10)
         self._errores = Errores()
         self._data = Dataset()
 
-    def _get_data(self):
+    @property
+    def data(self):
+        """Retorna el valor actual del atributo data"""
         return self._data
 
-    def _get_errores(self):
+    @property
+    def errores(self):
+        """Retorna el valor actual del atributo errores"""
         return self._errores
 
-    def iniciar_sesion(self, url):
-        """Inicia sesión en una página web usando un usuario y contraseña
+    def iniciar_sesion(self):
+        """
+        Inicia sesión en una página web usando un usuario y contraseña
 
-        Args:
-            url (str): [Url]
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
         """
         log(INFO, "Iniciando sesión")
-        self.driver.get(url)
-        self.driver.maximize_window()
-        username = self.wait.until(EC.presence_of_element_located((By.ID, "email")))
-        password = self.wait.until(EC.presence_of_element_located((By.ID, "pass")))
+        self._driver.get("https://www.facebook.com/")
+        self._driver.maximize_window()
+        username = self._wait.until(EC.presence_of_element_located((By.ID, "email")))
+        password = self._wait.until(EC.presence_of_element_located((By.ID, "pass")))
         username.clear()
         password.clear()
         username.send_keys(getenv("FB_USERNAME"))
         password.send_keys(getenv("FB_PASSWORD"))
-        self.wait.until(
+        self._wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[name='login']"))
         ).click()
         log(INFO, "Inicio de sesión con éxito")
 
     def mapear_datos(self, url):
+        """
+        Mapea y extrae los datos de las publicaciones de una categoría
+
+        Parameters
+        ----------
+        url: str
+            Link de la página de una categoría en facebook marketplace
+
+        Returns
+        -------
+        None
+        """
         sleep(10)
         log(INFO, "Accediendo a la URL")
-        self.driver.execute_script("window.open('about:blank', 'newtab');")
-        self.driver.switch_to.window("newtab")
-        self.driver.get(url)
+        self._driver.execute_script("window.open('about:blank', 'newtab');")
+        self._driver.switch_to.window("newtab")
+        self._driver.get(url)
 
         sleep(8)
         log(INFO, "Mapeando Publicaciones")
-        ropa = self.driver.find_elements(
+        ropa = self._driver.find_elements(
             By.XPATH, '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]'
         )
         fecha_publicacion = fecha_extraccion = int(
-            datetime.strptime(self._tiempo._get_fecha(), "%d/%m/%Y").timestamp()
+            datetime.strptime(self._tiempo.fecha, "%d/%m/%Y").timestamp()
         )
         fecha_flag = fecha_extraccion + 86400
         i = 0
         e = 0
-        del self.driver.requests
+        del self._driver.requests
 
         while fecha_publicacion >= fecha_extraccion:
             log(INFO, f"Scrapeando item {i + 1}")
@@ -239,10 +414,10 @@ class ScraperFb:
                     )[0]
                 except NoSuchElementException as error:
                     enlace = None
-                    self._errores._append_error(error, enlace)
+                    self._errores.agregar_error(error, enlace)
                 ropa[i].click()
                 sleep(5)
-                for request in self.driver.requests:
+                for request in self._driver.requests:
                     if not request.response or "graphql" not in request.url:
                         continue
 
@@ -264,65 +439,90 @@ class ScraperFb:
                             "marketplace_product_details_page"
                         ]["target"]
                         log(INFO, f"{dato['marketplace_listing_title']}")
-                        self._data._append_data(dato, self._tiempo._get_fecha(), enlace)
+                        self._data.agregar_data(dato, self._tiempo.fecha, enlace)
                         log(INFO, f"Item {i + 1} scrapeado con éxito")
                     break
-                self.driver.execute_script("window.history.go(-1)")
+                self._driver.execute_script("window.history.go(-1)")
 
             except (
                 NoSuchElementException,
                 ElementNotInteractableException,
                 StaleElementReferenceException,
             ) as error:
-                self._errores._append_error(error, enlace)
+                self._errores.agregar_error(error, enlace)
                 e = e + 1
 
             except (KeyError, JSONDecodeError) as error:
-                self._errores._append_error(error, enlace)
+                self._errores.agregar_error(error, enlace)
                 e = e + 1
-                self.driver.execute_script("window.history.go(-1)")
+                self._driver.execute_script("window.history.go(-1)")
 
             except Exception as error:
-                self._errores._append_error(error, enlace)
+                self._errores.agregar_error(error, enlace)
                 e = e + 1
                 log(CRITICAL, "Se detuvo inesperadamente el programa")
                 log(CRITICAL, f"Causa:\n{error}")
                 break
             i = i + 1
             if i == len(ropa):
-                self.driver.execute_script(
+                self._driver.execute_script(
                     "window.scrollTo(0, document.body.scrollHeight)"
                 )
                 sleep(7)
-                ropa = self.driver.find_elements(
+                ropa = self._driver.find_elements(
                     By.XPATH, '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]'
                 )
-
-            del self.driver.requests
+            del self._driver.requests
             log(
                 INFO,
                 "-------------------------------------------------------------------",
             )
             sleep(3)
-        self._tiempo._set_errores(e)
+        self._tiempo.num_error = e
         log(INFO, f"Se halló {e} errores")
         log(INFO, "Fin de la extraccion")
 
     def guardar_datos(
         self, dataset, filetype="Data", folder="Data", filename="fb_data"
     ):
+        """
+        Guarda los datos o errores obtenidos durante la ejecución del scraper
+
+        Parameters
+        ----------
+        dataset: dict
+            Conjunto de datos extraídos por el scraper
+        filetype: str
+            Indica si la información proviene de los datos o de los errores
+        folder: str
+            Ruta del archivo
+        filename: str
+            Nombre del archivo
+
+        Returns
+        -------
+        None
+        """
         log(INFO, f"Guardando {filetype}")
         df_fb_mkp_ropa = DataFrame(dataset)
+
+        if len(df_fb_mkp_ropa) == 0:
+            log(
+                INFO,
+                f"El archivo de tipo {filetype} no se va a guardar por no tener información",
+            )
+            return
+
         if filetype == "Data":
             df_fb_mkp_ropa.drop(len(df_fb_mkp_ropa) - 1, axis=0, inplace=True)
             cantidad = len(df_fb_mkp_ropa)
-            self._tiempo._set_cantidad(cantidad)
+            self._tiempo.cantidad = cantidad
         elif filetype == "Error":
-            cantidad = self._tiempo._get_errores()
+            cantidad = self._tiempo.num_error
         else:
             return
 
-        datetime_obj = datetime.strptime(self._tiempo._get_fecha(), "%d/%m/%Y")
+        datetime_obj = datetime.strptime(self._tiempo.fecha, "%d/%m/%Y")
         filepath = folder + "/" + datetime_obj.strftime("%d-%m-%Y") + "/"
         filename = (
             filename
@@ -337,9 +537,23 @@ class ScraperFb:
         df_fb_mkp_ropa.to_excel(filepath + filename, index=False)
         log(INFO, f"{filetype} Guardados Correctamente")
 
-    def guardar_tiempos(self, filename, sheet_name, start):
+    def guardar_tiempos(self, filename, sheet_name):
+        """
+        Guarda la información del tiempo de ejecución del scraper
+
+        Parameters
+        ----------
+        filename: str
+            Nombre del archivo
+        sheet_name: str
+            Nombre de la hoja de cálculo
+
+        Returns
+        -------
+        None
+        """
         log(INFO, "Guardando tiempos")
-        self._tiempo._set_param_final(start)
+        self._tiempo.set_param_final()
         header_exist = True
         if path.isfile(filename):
             tiempos = load_workbook(filename)
@@ -352,43 +566,58 @@ class ScraperFb:
             header_exist = False
         worksheet = tiempos[sheet_name]
         if not header_exist:
-            worksheet.append(list(self._tiempo.__dict__.keys()))
-        worksheet.append(list(self._tiempo.__dict__.values()))
+            worksheet.append(list(self._tiempo.__dict__.keys())[1:])
+        worksheet.append(list(self._tiempo.__dict__.values())[1:])
         tiempos.save(filename)
         tiempos.close()
         log(INFO, "Tiempos Guardados Correctamente")
 
 
 def config_log():
+    """
+    Función que configura los logs para rastrear al programa
+         Parameter:
+                 None
+
+        Returns:
+               None
+    """
     seleniumLogger.setLevel(ERROR)
     urllibLogger.setLevel(ERROR)
-    urllibLogger.propagate = False
     logger = getLogger("seleniumwire")
     logger.setLevel(ERROR)
-    basicConfig(format="%(asctime)s %(message)s", level=INFO)
+    basicConfig(
+        format="%(asctime)s %(message)s", level=INFO, handlers=[StreamHandler()]
+    )
 
 
 def validar_parametros(parametros):
+    """
+    Función que valida si los parámetros a usar están definidos
+         Parameter:
+                 parametros (list): Lista de parámetros
+
+        Returns:
+               None
+    """
     for parametro in parametros:
         if not parametro:
-            log(ERROR, f"Parámetros incorrectos")
+            log(ERROR, "Parámetros incorrectos")
             return False
     log(INFO, "Parámetros válidos")
+    return True
 
 
 def main():
     # Formato para el debugger
-    log(INFO, "Configurando Formato Básico del Debugger")
     config_log()
+    log(INFO, "Configurando Formato Básico del Debugger")
 
     # Cargar variables de entorno
     log(INFO, "Cargando Variables de entorno")
     load_dotenv()
 
-    start = time()
-
-    # Url base a scrapear
-    url_base = getenv("URL_BASE")
+    # Url de la categoría a scrapear
     url_ropa = getenv("URL_CATEGORY")
 
     # Parámetros para guardar la data extraída por el scraper
@@ -406,7 +635,6 @@ def main():
     # Validar parámetros
     if not validar_parametros(
         [
-            url_base,
             url_ropa,
             data_filename,
             data_folder,
@@ -419,26 +647,24 @@ def main():
         return
 
     # Inicializar scrapper
-    scraper = ScraperFb(start)
+    scraper = ScraperFb()
 
     # Iniciar sesión
-    scraper.iniciar_sesion(url_base)
+    scraper.iniciar_sesion()
 
     # Extracción de datos
     scraper.mapear_datos(url_ropa)
 
     # Guardando la data extraída por el scraper
-    scraper.guardar_datos(
-        scraper._get_data()._get_dataset(), "Data", data_folder, data_filename
-    )
+    scraper.guardar_datos(scraper.data.dataset, "Data", data_folder, data_filename)
 
     # Guardando los errores extraídos por el scraper
     scraper.guardar_datos(
-        scraper._get_errores()._get_errores(), "Error", error_folder, error_filename
+        scraper.errores.errores, "Error", error_folder, error_filename
     )
 
     # Guardando los tiempos durante la ejecución del scraper
-    scraper.guardar_tiempos(filename_tiempos, sheet_tiempos, start)
+    scraper.guardar_tiempos(filename_tiempos, sheet_tiempos)
     log(INFO, "Programa ejecutado satisfactoriamente")
 
 
