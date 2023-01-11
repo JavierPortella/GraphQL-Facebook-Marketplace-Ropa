@@ -309,13 +309,6 @@ class ScraperFb:
         Guarda la información del tiempo de ejecución del scraper
     """
 
-    """Representa a un bot para hacer web scarping en fb marketplace.
-
-    Attributes:
-        driver (Object): Maneja un navegador para hacer web scraping
-        wait (Object): Maneja el Tiempo de espera durante la ejecución del bot
-    """
-
     def __init__(self):
         """
         Genera todos los atributos para el objeto ScraperFb
