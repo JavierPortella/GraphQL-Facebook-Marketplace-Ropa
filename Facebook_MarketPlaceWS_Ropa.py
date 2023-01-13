@@ -1,6 +1,15 @@
 from datetime import datetime, timedelta
 from json import loads, JSONDecodeError
-from logging import basicConfig, CRITICAL, ERROR, getLogger, INFO, log, StreamHandler
+from logging import (
+    basicConfig,
+    CRITICAL,
+    ERROR,
+    FileHandler,
+    getLogger,
+    INFO,
+    log,
+    StreamHandler,
+)
 from os import getenv, makedirs, path
 from re import findall
 from time import localtime, sleep, strftime, time
@@ -207,10 +216,14 @@ class Tiempo:
         Hora de término de la ejecución del scraper en formato %H:%M:%S
     cantidad : int
         Cantidad de publicaciones extraídas de la página de facebook marketplace
+    cantidad_real: int
+        Cantidad real de publicaciones extraídas de la página de facebook marketplace
     tiempo : str
         Tiempo de ejecución del scraper en formato %d days, %H:%M:%S
     productos_por_min : float
         Cantidad de publicaciones que puede extraer el scraper en un minuto
+    productos_por_min_real : float
+        Cantidad real de publicaciones que puede extraer el scraper en un minuto
     num_error : int
         Cantidad de errores ocurridos durante la ejecución del scraper
 
@@ -220,24 +233,36 @@ class Tiempo:
         Establece los parámetros finales cuando se termina de ejecutar el scraper
     """
 
-    def __init__(self):
+    def __init__(self, fecha_actual):
         """
         Genera todos los atributos para el objeto Tiempo
+
+        Parameters
+        ----------
+        fecha_actual: str
+            Fecha en la que se ejecuta el scraper
         """
         self._start = time()
         self._hora_inicio = strftime("%H:%M:%S", localtime(self._start))
         log(INFO, f"Hora de inicio: {self._hora_inicio}")
-        self._fecha = (datetime.now().date() - timedelta(days=1)).strftime("%d/%m/%Y")
+        self._fecha = fecha_actual.strftime("%d/%m/%Y")
         self._hora_fin = None
         self._cantidad = None
+        self._cantidad_real = None
         self._tiempo = None
         self._productos_por_min = None
+        self._productos_por_min_real = None
         self._num_error = None
 
     @property
     def cantidad(self):
         """Retorna el valor actual o asigna un nuevo valor del atributo cantidad"""
         return self._cantidad
+
+    @property
+    def cantidad_real(self):
+        """Retorna el valor actual o asigna un nuevo valor del atributo cantidad_real"""
+        return self._cantidad_real
 
     @property
     def fecha(self):
@@ -252,6 +277,10 @@ class Tiempo:
     @cantidad.setter
     def cantidad(self, cantidad):
         self._cantidad = cantidad
+
+    @cantidad_real.setter
+    def cantidad_real(self, cantidad_real):
+        self._cantidad_real = cantidad_real
 
     @num_error.setter
     def num_error(self, num_error):
@@ -276,6 +305,7 @@ class Tiempo:
         total = end - self._start
         self._tiempo = str(timedelta(seconds=total)).split(".")[0]
         self._productos_por_min = round(self._cantidad / (total / 60), 2)
+        self._productos_por_min_real = round(self._cantidad_real / (total / 60), 2)
 
 
 class ScraperFb:
@@ -309,12 +339,17 @@ class ScraperFb:
         Guarda la información del tiempo de ejecución del scraper
     """
 
-    def __init__(self):
+    def __init__(self, fecha_actual):
         """
         Genera todos los atributos para el objeto ScraperFb
+
+        Parameters
+        ----------
+        fecha_actual: str
+            Fecha en la que se ejecuta el scraper
         """
         log(INFO, "Inicializando scraper")
-        self._tiempo = Tiempo()
+        self._tiempo = Tiempo(fecha_actual)
         chrome_options = webdriver.ChromeOptions()
         prefs = {"profile.default_content_setting_values.notifications": 2}
         chrome_options.add_experimental_option("prefs", prefs)
@@ -395,9 +430,8 @@ class ScraperFb:
         del self._driver.requests
 
         while fecha_publicacion >= fecha_extraccion:
-            log(INFO, f"Scrapeando item {i + 1}")
-
             try:
+                log(INFO, f"Scrapeando item {i + 1}")
                 try:
                     enlace = findall(
                         "(.*)\/\?",
@@ -409,7 +443,7 @@ class ScraperFb:
                     enlace = None
                     self._errores.agregar_error(error, enlace)
                 ropa[i].click()
-                sleep(5)
+                sleep(6)
                 for request in self._driver.requests:
                     if not request.response or "graphql" not in request.url:
                         continue
@@ -443,40 +477,47 @@ class ScraperFb:
                 StaleElementReferenceException,
             ) as error:
                 self._errores.agregar_error(error, enlace)
-                e = e + 1
+                e += 1
 
             except (KeyError, JSONDecodeError) as error:
                 self._errores.agregar_error(error, enlace)
-                e = e + 1
+                e += 1
                 self._driver.execute_script("window.history.go(-1)")
 
             except Exception as error:
                 self._errores.agregar_error(error, enlace)
-                e = e + 1
+                e += 1
+                i += 1
                 log(CRITICAL, "Se detuvo inesperadamente el programa")
                 log(CRITICAL, f"Causa:\n{error}")
                 break
-            i = i + 1
-            if i == len(ropa):
-                self._driver.execute_script(
-                    "window.scrollTo(0, document.body.scrollHeight)"
+            finally:
+                i += 1
+                if i == len(ropa):
+                    self._driver.execute_script(
+                        "window.scrollTo(0, document.body.scrollHeight)"
+                    )
+                    sleep(7)
+                    ropa = self._driver.find_elements(
+                        By.XPATH,
+                        '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]',
+                    )
+                del self._driver.requests
+                log(
+                    INFO,
+                    "-------------------------------------------------------------------",
                 )
-                sleep(7)
-                ropa = self._driver.find_elements(
-                    By.XPATH, '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]'
-                )
-            del self._driver.requests
-            log(
-                INFO,
-                "-------------------------------------------------------------------",
-            )
-            sleep(3)
+        self._tiempo.cantidad_real = i - e
         self._tiempo.num_error = e
         log(INFO, f"Se halló {e} errores")
         log(INFO, "Fin de la extraccion")
 
     def guardar_datos(
-        self, dataset, filetype="Data", folder="Data", filename="fb_data"
+        self,
+        dataset,
+        filetype="Data",
+        folder="Data//datos_obtenidos",
+        filename="fb_data",
     ):
         """
         Guarda los datos o errores obtenidos durante la ejecución del scraper
@@ -513,10 +554,14 @@ class ScraperFb:
         elif filetype == "Error":
             cantidad = self._tiempo.num_error
         else:
+            log(
+                INFO,
+                f"El archivo de tipo {filetype} no está admitido. Solo se aceptan los valores Data y Error",
+            )
             return
 
         datetime_obj = datetime.strptime(self._tiempo.fecha, "%d/%m/%Y")
-        filepath = folder + "/" + datetime_obj.strftime("%d-%m-%Y") + "/"
+        filepath = path.join(folder, datetime_obj.strftime("%d-%m-%Y"))
         filename = (
             filename
             + "_"
@@ -527,7 +572,7 @@ class ScraperFb:
         )
         if not path.exists(filepath):
             makedirs(filepath)
-        df_fb_mkp_ropa.to_excel(filepath + filename, index=False)
+        df_fb_mkp_ropa.to_excel(path.join(filepath, filename), index=False)
         log(INFO, f"{filetype} Guardados Correctamente")
 
     def guardar_tiempos(self, filename, sheet_name):
@@ -566,21 +611,28 @@ class ScraperFb:
         log(INFO, "Tiempos Guardados Correctamente")
 
 
-def config_log():
+def config_log(log_folder, log_filename, fecha_actual):
     """
     Función que configura los logs para rastrear al programa
-         Parameter:
-                 None
-
+        Parameter:
+                log_folder (str): Carpeta donde se va a generar el archivo log
+                log_filename (str): Nombre del archivo log a ser generado
+                fecha_actual (datetime): Fecha actual de la creación del archivo log
         Returns:
-               None
+                None
     """
     seleniumLogger.setLevel(ERROR)
     urllibLogger.setLevel(ERROR)
     logger = getLogger("seleniumwire")
     logger.setLevel(ERROR)
+    log_path = path.join(log_folder, fecha_actual.strftime("%d-%m-%Y"))
+    log_filename = log_filename + "_" + fecha_actual.strftime("%d%m%Y") + ".log"
+    if path.exists(log_path):
+        makedirs(log_path)
     basicConfig(
-        format="%(asctime)s %(message)s", level=INFO, handlers=[StreamHandler()]
+        format="%(asctime)s %(message)s",
+        level=INFO,
+        handlers=[StreamHandler(), FileHandler(path.join(log_path, log_filename))],
     )
 
 
@@ -603,7 +655,8 @@ def validar_parametros(parametros):
 
 def main():
     # Formato para el debugger
-    config_log()
+    fecha_actual = datetime.now().date()
+    config_log("Log", "fb_ropa_log", fecha_actual)
     log(INFO, "Configurando Formato Básico del Debugger")
 
     # Cargar variables de entorno
@@ -658,7 +711,7 @@ def main():
 
     # Guardando los tiempos durante la ejecución del scraper
     scraper.guardar_tiempos(filename_tiempos, sheet_tiempos)
-    log(INFO, "Programa ejecutado satisfactoriamente")
+    log(INFO, "Programa finalizado")
 
 
 if __name__ == "__main__":

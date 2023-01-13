@@ -69,10 +69,6 @@ pip install -r requirements.txt
 py Facebook_MarketPlaceWS_Ropa.py
 ```
 
-## Requirements
-
-
-
 ## License
 
 [MIT](https://choosealicense.com/licenses/mit/)
