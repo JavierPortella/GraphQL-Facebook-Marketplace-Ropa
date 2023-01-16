@@ -150,8 +150,8 @@ class Dataset:
         ----------
         item: dict
             Conjunto de datos que contiene toda la información de una publicación
-        fecha_extraccion: datetime
-            Fecha actual en la que se creó una publicación
+        fecha_extraccion: str
+            Fecha actual en la que se creó una publicación en formato %d/%m/%Y
         enlace: str
             Enlace de la publicación de la página facebook marketplace
 
@@ -206,7 +206,7 @@ class Tiempo:
 
     Attributes
     ----------
-    start: float
+    start : float
         Hora actual en segundos
     hora_inicio : str
         Hora de inicio de la ejecución del scraper en formato %H:%M:%S
@@ -443,7 +443,7 @@ class ScraperFb:
                     enlace = None
                     self._errores.agregar_error(error, enlace)
                 ropa[i].click()
-                sleep(6)
+                sleep(5)
                 for request in self._driver.requests:
                     if not request.response or "graphql" not in request.url:
                         continue
@@ -502,6 +502,7 @@ class ScraperFb:
                         By.XPATH,
                         '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]',
                     )
+                sleep(2)
                 del self._driver.requests
                 log(
                     INFO,
@@ -611,7 +612,7 @@ class ScraperFb:
         log(INFO, "Tiempos Guardados Correctamente")
 
 
-def config_log(log_folder, log_filename, fecha_actual):
+def config_log(log_folder, log_filename, log_file_mode, log_file_encoding, fecha_actual):
     """
     Función que configura los logs para rastrear al programa
         Parameter:
@@ -627,12 +628,12 @@ def config_log(log_folder, log_filename, fecha_actual):
     logger.setLevel(ERROR)
     log_path = path.join(log_folder, fecha_actual.strftime("%d-%m-%Y"))
     log_filename = log_filename + "_" + fecha_actual.strftime("%d%m%Y") + ".log"
-    if path.exists(log_path):
+    if not path.exists(log_path):
         makedirs(log_path)
     basicConfig(
         format="%(asctime)s %(message)s",
         level=INFO,
-        handlers=[StreamHandler(), FileHandler(path.join(log_path, log_filename))],
+        handlers=[StreamHandler(), FileHandler(path.join(log_path, log_filename), log_file_mode, log_file_encoding)],
     )
 
 
@@ -655,8 +656,8 @@ def validar_parametros(parametros):
 
 def main():
     # Formato para el debugger
-    fecha_actual = datetime.now().date()
-    config_log("Log", "fb_ropa_log", fecha_actual)
+    fecha_actual = datetime.now().date() - timedelta(days=1)
+    config_log("Log", "fb_ropa_log", "w", "utf-8", fecha_actual)
     log(INFO, "Configurando Formato Básico del Debugger")
 
     # Cargar variables de entorno
@@ -693,7 +694,7 @@ def main():
         return
 
     # Inicializar scrapper
-    scraper = ScraperFb()
+    scraper = ScraperFb(fecha_actual)
 
     # Iniciar sesión
     scraper.iniciar_sesion()
