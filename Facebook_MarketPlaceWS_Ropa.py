@@ -432,16 +432,12 @@ class ScraperFb:
         while fecha_publicacion >= fecha_extraccion:
             try:
                 log(INFO, f"Scrapeando item {i + 1}")
-                try:
-                    enlace = findall(
-                        "(.*)\/\?",
-                        ropa[i]
-                        .find_element(By.XPATH, ".//ancestor::a")
-                        .get_attribute("href"),
-                    )[0]
-                except NoSuchElementException as error:
-                    enlace = None
-                    self._errores.agregar_error(error, enlace)
+                enlace = findall(
+                    "(.*)\/\?",
+                    ropa[i]
+                    .find_element(By.XPATH, ".//ancestor::a")
+                    .get_attribute("href"),
+                )[0]
                 ropa[i].click()
                 sleep(5)
                 for request in self._driver.requests:
@@ -476,6 +472,7 @@ class ScraperFb:
                 ElementNotInteractableException,
                 StaleElementReferenceException,
             ) as error:
+                enlace = None
                 self._errores.agregar_error(error, enlace)
                 e += 1
 
@@ -612,7 +609,9 @@ class ScraperFb:
         log(INFO, "Tiempos Guardados Correctamente")
 
 
-def config_log(log_folder, log_filename, log_file_mode, log_file_encoding, fecha_actual):
+def config_log(
+    log_folder, log_filename, log_file_mode, log_file_encoding, fecha_actual
+):
     """
     Función que configura los logs para rastrear al programa
         Parameter:
@@ -633,7 +632,12 @@ def config_log(log_folder, log_filename, log_file_mode, log_file_encoding, fecha
     basicConfig(
         format="%(asctime)s %(message)s",
         level=INFO,
-        handlers=[StreamHandler(), FileHandler(path.join(log_path, log_filename), log_file_mode, log_file_encoding)],
+        handlers=[
+            StreamHandler(),
+            FileHandler(
+                path.join(log_path, log_filename), log_file_mode, log_file_encoding
+            ),
+        ],
     )
 
 
