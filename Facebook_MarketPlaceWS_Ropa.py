@@ -8,7 +8,8 @@ from logging import (
     getLogger,
     INFO,
     log,
-    StreamHandler,
+    shutdown,
+    StreamHandler
 )
 from os import getenv, makedirs, path
 from re import findall
@@ -840,6 +841,10 @@ def main():
     except Exception as error:
         log(ERROR, f"Error: {error}")
         log(INFO, "Programa ejecutado con fallos")
+
+    finally:
+        # Liberar el archivo log
+        shutdown()
 
 
 if __name__ == "__main__":

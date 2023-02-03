@@ -9,6 +9,16 @@ Scrape facebook marketplace from any category into a .xlsx file from a previous 
 * **Programming language:** Python
 * **IDE:** Jupyter Notebook
 
+## Requirements
+- python 3.8.5
+- pip dependencies
+    - python-dotenv == 0.21.0
+    - openpyxl == 3.0.9
+    - pandas == 1.4.2
+    - selenium == 4.8.0
+    - selenium-wire == 5.1.0
+    - webdriver-manager == 3.8.5
+
 ## Instalation
 
 **1. Clone the project**
