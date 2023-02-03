@@ -83,7 +83,7 @@ class Errores:
         -------
         None
         """
-        log(ERROR, error)
+        log(ERROR, f"Error:\n{error}")
         traceback_error = TracebackException.from_exception(error)
         error_stack = traceback_error.stack[0]
         self._errores["Clase"].append(traceback_error.exc_type)
@@ -395,7 +395,25 @@ class ScraperFb:
         self._wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[name='login']"))
         ).click()
+        sleep(10)
         log(INFO, "Inicio de sesión con éxito")
+
+    def obtener_publicaciones(self, selector, xpath):
+        """
+        Retornar una lista de publicaciones visibles con respecto a una categoría en facebook marketplace
+
+        Parameters
+        ----------
+        selector: str
+            Selector a ser usado para localizar las publicaciones
+        xpath: str
+            Ruta de las publicaciones a ser usado por el selector
+
+        Returns
+        -------
+        list
+        """
+        return self._driver.find_elements(selector, xpath)
 
     def mapear_datos(self, url):
         """
@@ -410,61 +428,81 @@ class ScraperFb:
         -------
         None
         """
-        sleep(10)
         log(INFO, "Accediendo a la URL")
         self._driver.execute_script("window.open('about:blank', 'newtab');")
         self._driver.switch_to.window("newtab")
         self._driver.get(url)
-
         sleep(8)
+
         log(INFO, "Mapeando Publicaciones")
-        ropa = self._driver.find_elements(
+        ropa = self.obtener_publicaciones(
             By.XPATH, '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]'
         )
+
+        log(INFO, "Creando variables")
+        # Enteros que hacen referencia a la fecha en que se postea una publicación y en la que se extrae la información
         fecha_publicacion = fecha_extraccion = int(
             datetime.strptime(self._tiempo.fecha, "%d/%m/%Y").timestamp()
         )
+        # Entero que hace referencia al día siguiente de la fecha en la que se extrae la información
         fecha_flag = fecha_extraccion + 86400
+        # Cuenta la cantidad de publicaciones que mapea el scraper
         i = 0
+        # Cuenta la cantidad de errores ocurridos durante la ejecución del mapeo del scraper
         e = 0
-        del self._driver.requests
-
+        # Flag para manejar el intento de veces que se
+        f = 0
         while fecha_publicacion >= fecha_extraccion:
             try:
                 log(INFO, f"Scrapeando item {i + 1}")
+                # Eliminar de la memoria requests innecesarios
+                del self._driver.requests
+                # Link de la publicación de facebook
                 enlace = findall(
                     "(.*)\/\?",
                     ropa[i]
                     .find_element(By.XPATH, ".//ancestor::a")
                     .get_attribute("href"),
                 )[0]
+                # Dar click a la publicación de facebook
                 ropa[i].click()
                 sleep(5)
+
                 for request in self._driver.requests:
+                    # Validar si la api es de graphql
                     if not request.response or "graphql" not in request.url:
                         continue
-
+                    # Obtener la respuesta de la api en bytes
                     body = decode(
                         request.response.body,
                         request.response.headers.get("Content-Encoding", "identity"),
                     )
+                    # Decodificar la respuesta a utf-8
                     decoded_body = body.decode("utf-8")
-                    json_data = loads(decoded_body)
 
-                    if "prefetch_uris_v2" not in json_data["extensions"]:
+                    # Validar si la respuesta decodificada es la deseada
+                    if decoded_body.find('"extensions":{"prefetch_uris_v2"') == -1:
                         continue
 
+                    # Convertir al formato json la respuesta decodificada anteriormente
+                    json_data = loads(decoded_body)
+                    # Extraer la fecha de publicación
                     fecha_publicacion = json_data["data"]["viewer"][
                         "marketplace_product_details_page"
                     ]["target"]["creation_time"]
+
+                    # Validar si la fecha de publicación corresponda a la deseada
                     if fecha_publicacion < fecha_flag:
+                        # Diccionario que contiene toda la información de la publicación
                         dato = json_data["data"]["viewer"][
                             "marketplace_product_details_page"
                         ]["target"]
                         log(INFO, f"{dato['marketplace_listing_title']}")
                         self._data.agregar_data(dato, self._tiempo.fecha, enlace)
                         log(INFO, f"Item {i + 1} scrapeado con éxito")
+
                     break
+                # Regresar al inicio donde se encuentran todas las publicaciones de facebook
                 self._driver.execute_script("window.history.go(-1)")
 
             except (
@@ -488,23 +526,25 @@ class ScraperFb:
                 log(CRITICAL, "Se detuvo inesperadamente el programa")
                 log(CRITICAL, f"Causa:\n{error}")
                 break
+
             finally:
                 i += 1
                 if i == len(ropa):
                     self._driver.execute_script(
                         "window.scrollTo(0, document.body.scrollHeight)"
                     )
-                    sleep(7)
-                    ropa = self._driver.find_elements(
+                    sleep(6)
+                    ropa = self.obtener_publicaciones(
                         By.XPATH,
                         '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]',
                     )
                 sleep(2)
-                del self._driver.requests
                 log(
                     INFO,
                     "-------------------------------------------------------------------",
                 )
+
+        del self._driver.requests
         self._tiempo.cantidad_real = i - e
         self._tiempo.num_error = e
         log(INFO, f"Se halló {e} errores")
@@ -602,8 +642,10 @@ class ScraperFb:
             header_exist = False
         worksheet = tiempos[sheet_name]
         if not header_exist:
-            worksheet.append(list(self._tiempo.__dict__.keys())[1:])
-        worksheet.append(list(self._tiempo.__dict__.values())[1:])
+            keys = cambiar_posiciones(list(self._tiempo.__dict__.keys())[1:], 0, 1)
+            worksheet.append(keys)
+        values = cambiar_posiciones(list(self._tiempo.__dict__.values())[1:], 0, 1)
+        worksheet.append(values)
         tiempos.save(filename)
         tiempos.close()
         log(INFO, "Tiempos Guardados Correctamente")
@@ -658,65 +700,88 @@ def validar_parametros(parametros):
     return True
 
 
+def cambiar_posiciones(lista, index1, index2):
+    """
+    Función que intercambia las posiciones de 2 elementos de un arreglo
+         Parameter:
+                 lista (list): Lista no vacía de elementos
+                 index1 (int): Posición del primer elemento
+                 index2 (int): Posición del segundo elemento
+
+        Returns:
+               list
+    """
+    if len(lista) == 0:
+        return []
+    aux = lista[index2]
+    lista[index2] = lista[index1]
+    lista[index1] = aux
+    return lista
+
+
 def main():
-    # Formato para el debugger
-    fecha_actual = datetime.now().date() - timedelta(days=1)
-    config_log("Log", "fb_ropa_log", "w", "utf-8", fecha_actual)
-    log(INFO, "Configurando Formato Básico del Debugger")
+    try:
+        # Formato para el debugger
+        fecha_actual = datetime.now().date() - timedelta(days=1)
+        config_log("Log", "fb_ropa_log", "w", "utf-8", fecha_actual)
+        log(INFO, "Configurando Formato Básico del Debugger")
 
-    # Cargar variables de entorno
-    log(INFO, "Cargando Variables de entorno")
-    load_dotenv()
+        # Cargar variables de entorno
+        log(INFO, "Cargando Variables de entorno")
+        load_dotenv()
 
-    # Url de la categoría a scrapear
-    url_ropa = getenv("URL_CATEGORY")
+        # Url de la categoría a scrapear
+        url_ropa = getenv("URL_CATEGORY")
 
-    # Parámetros para guardar la data extraída por el scraper
-    data_filename = getenv("DATA_FILENAME")
-    data_folder = getenv("DATA_FOLDER")
+        # Parámetros para guardar la data extraída por el scraper
+        data_filename = getenv("DATA_FILENAME")
+        data_folder = getenv("DATA_FOLDER")
 
-    # Parámetros para guardar la medición de la ejecución del scraper
-    filename_tiempos = getenv("FILENAME_TIEMPOS")
-    sheet_tiempos = getenv("SHEET_TIEMPOS")
+        # Parámetros para guardar la medición de la ejecución del scraper
+        filename_tiempos = getenv("FILENAME_TIEMPOS")
+        sheet_tiempos = getenv("SHEET_TIEMPOS")
 
-    # Parámetros para guardar los errores durante la ejecución por el scraper
-    error_filename = getenv("ERROR_FILENAME")
-    error_folder = getenv("ERROR_FOLDER")
+        # Parámetros para guardar los errores durante la ejecución por el scraper
+        error_filename = getenv("ERROR_FILENAME")
+        error_folder = getenv("ERROR_FOLDER")
 
-    # Validar parámetros
-    if not validar_parametros(
-        [
-            url_ropa,
-            data_filename,
-            data_folder,
-            filename_tiempos,
-            sheet_tiempos,
-            error_filename,
-            error_folder,
-        ]
-    ):
-        return
+        # Validar parámetros
+        if not validar_parametros(
+            [
+                url_ropa,
+                data_filename,
+                data_folder,
+                filename_tiempos,
+                sheet_tiempos,
+                error_filename,
+                error_folder,
+            ]
+        ):
+            return
 
-    # Inicializar scrapper
-    scraper = ScraperFb(fecha_actual)
+        # Inicializar scrapper
+        scraper = ScraperFb(fecha_actual)
 
-    # Iniciar sesión
-    scraper.iniciar_sesion()
+        # Iniciar sesión
+        scraper.iniciar_sesion()
 
-    # Extracción de datos
-    scraper.mapear_datos(url_ropa)
+        # Extracción de datos
+        scraper.mapear_datos(url_ropa)
 
-    # Guardando la data extraída por el scraper
-    scraper.guardar_datos(scraper.data.dataset, "Data", data_folder, data_filename)
+        # Guardando la data extraída por el scraper
+        scraper.guardar_datos(scraper.data.dataset, "Data", data_folder, data_filename)
 
-    # Guardando los errores extraídos por el scraper
-    scraper.guardar_datos(
-        scraper.errores.errores, "Error", error_folder, error_filename
-    )
+        # Guardando los errores extraídos por el scraper
+        scraper.guardar_datos(
+            scraper.errores.errores, "Error", error_folder, error_filename
+        )
 
-    # Guardando los tiempos durante la ejecución del scraper
-    scraper.guardar_tiempos(filename_tiempos, sheet_tiempos)
-    log(INFO, "Programa finalizado")
+        # Guardando los tiempos durante la ejecución del scraper
+        scraper.guardar_tiempos(filename_tiempos, sheet_tiempos)
+        log(INFO, "Programa finalizado")
+    except Exception as error:
+        log(ERROR, f"Error: {error}")
+        log(INFO, "Programa ejecutado con fallos")
 
 
 if __name__ == "__main__":
