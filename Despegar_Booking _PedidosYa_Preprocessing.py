@@ -55,7 +55,7 @@ def replace_values(df_data, old_value, new_value=None, regex=False):
     por otro valor dado
         Parameter:
                 df_data (pandas.core.frame.DataFrame): DataFrame
-                old_value (str): Valor a ser reemplazado
+                old_value (str): Valor(es) a ser reemplazado(s)
                 new_value (str): Valor a reemplazar
                 regex (bool): Indica si en el reemplazo se hace uso de expresiones regulares
         Returns:
@@ -83,7 +83,7 @@ def change_datatype(df_data, datatype="int64"):
     por otro tipo de dato dado
         Parameter:
                 df_data (pandas.core.frame.DataFrame): DataFrame
-                datatype (str): Tipo de dato que se usa para la conversión
+                datatype (str): Nombre del tipo de dato que se usa para la conversión
         Returns:
                 pandas.core.frame.DataFrame
     """
@@ -151,7 +151,7 @@ def process_data_general(data):
         Returns:
                 pandas.core.frame.DataFrame
     """
-    # Reemplazando valores nulos y sus variantes por n.d.
+    log(INFO, "Reemplazando valores nulos y sus variantes por n.d.")
     null_values = ["undefined", "null", "-"]
     data = replace_null(data, "n.d.")
     data = replace_values(data, null_values, "n.d.")
