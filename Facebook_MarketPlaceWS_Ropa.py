@@ -53,7 +53,7 @@ class Errores:
 
     def __init__(self):
         """
-        Genera todos los atributos para el objeto Errores
+        Genera todos los atributos para una instancia de la clase Errores
         """
         self._errores = {
             "Clase": [],
@@ -75,7 +75,7 @@ class Errores:
         Parameters
         ----------
         error: Exception
-            Objeto de tipo excepción ocurrida durante la ejecución del scraper
+            Error ocurrido durante la ejecución del scraper
         enlace: str
             Enlace de la publicación de la página facebook marketplace
 
@@ -112,7 +112,7 @@ class Dataset:
 
     def __init__(self):
         """
-        Genera todos los atributos para el objeto Dataset
+        Genera todos los atributos para una instancia de la clase Dataset
         """
         self._dataset = {
             "Fecha Extraccion": [],
@@ -151,10 +151,9 @@ class Dataset:
         item: dict
             Conjunto de datos que contiene toda la información de una publicación
         fecha_extraccion: str
-            Fecha actual en la que se creó una publicación en formato %d/%m/%Y
+            Fecha correspondiente a la extracción de todas las publicaciones
         enlace: str
-            Enlace de la publicación de la página facebook marketplace
-
+            Enlace de la publicación
         Returns
         -------
         None
@@ -200,7 +199,7 @@ class Dataset:
 
 class Tiempo:
     """
-    Representa el tiempo que se demora el scraper en extraer la información
+    Representa al tiempo de ejecución del scraper
 
     ...
 
@@ -217,13 +216,13 @@ class Tiempo:
     cantidad : int
         Cantidad de publicaciones extraídas de la página de facebook marketplace
     cantidad_real: int
-        Cantidad real de publicaciones extraídas de la página de facebook marketplace
+        Cantidad de publicaciones analizadas de la página de facebook marketplace
     tiempo : str
         Tiempo de ejecución del scraper en formato %d days, %H:%M:%S
     productos_por_min : float
         Cantidad de publicaciones que puede extraer el scraper en un minuto
     productos_por_min_real : float
-        Cantidad real de publicaciones que puede extraer el scraper en un minuto
+        Cantidad publicaciones que puede analizar el scraper en un minuto
     num_error : int
         Cantidad de errores ocurridos durante la ejecución del scraper
 
@@ -235,7 +234,7 @@ class Tiempo:
 
     def __init__(self, fecha_actual):
         """
-        Genera todos los atributos para el objeto Tiempo
+        Genera todos los atributos para una instancia de la clase Tiempo
 
         Parameters
         ----------
@@ -330,10 +329,12 @@ class ScraperFb:
     Methods
     -------
     iniciar_sesion():
-        Iniciar sesión en facebook usando un usuario y contraseña
+        Inicia sesión en la página web de facebook usando un usuario y contraseña
+    obtener_publicaciones(selector, xpath):
+        Retorna una lista de publicaciones visibles en facebook marketplace
     mapear_datos(url):
         Mapea y extrae los datos de las publicaciones de una categoría
-    guardar_datos(dataset, filetype, folder, filename):
+    guardar_datos(filetype, folder, filename):
         Guarda los datos o errores obtenidos durante la ejecución del scraper
     guardar_tiempos(filename, sheet_name):
         Guarda la información del tiempo de ejecución del scraper
@@ -341,7 +342,7 @@ class ScraperFb:
 
     def __init__(self, fecha_actual):
         """
-        Genera todos los atributos para el objeto ScraperFb
+        Genera todos los atributos para una instancia de la clase ScraperFb
 
         Parameters
         ----------
@@ -373,7 +374,7 @@ class ScraperFb:
 
     def iniciar_sesion(self):
         """
-        Inicia sesión en una página web usando un usuario y contraseña
+        Inicia sesión en la página web de facebook usando un usuario y contraseña
 
         Parameters
         ----------
@@ -384,14 +385,20 @@ class ScraperFb:
         None
         """
         log(INFO, "Iniciando sesión")
+        # Ingresando al página de facebook
         self._driver.get("https://www.facebook.com/")
+        # Maximizando el explorador
         self._driver.maximize_window()
+        # Localizando los campos de usuario y contraseña
         username = self._wait.until(EC.presence_of_element_located((By.ID, "email")))
         password = self._wait.until(EC.presence_of_element_located((By.ID, "pass")))
+        # Limpiando el contenido que existe en los campos de usuario y contraseña
         username.clear()
         password.clear()
+        # Mandando valores a los campos de usuario y contraseña
         username.send_keys(getenv("FB_USERNAME"))
         password.send_keys(getenv("FB_PASSWORD"))
+        # Dar click en el botón de iniciar sesión
         self._wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[name='login']"))
         ).click()
@@ -450,8 +457,6 @@ class ScraperFb:
         i = 0
         # Cuenta la cantidad de errores ocurridos durante la ejecución del mapeo del scraper
         e = 0
-        # Flag para manejar el intento de veces que se
-        f = 0
         while fecha_publicacion >= fecha_extraccion:
             try:
                 log(INFO, f"Scrapeando item {i + 1}")
@@ -529,11 +534,15 @@ class ScraperFb:
 
             finally:
                 i += 1
+
+                # Verificar si se ha mapeado todas las publicaciones visibles
                 if i == len(ropa):
+                    # Hacer uso del scroll para obtener más publicaciones
                     self._driver.execute_script(
                         "window.scrollTo(0, document.body.scrollHeight)"
                     )
                     sleep(6)
+                    # Mapear las nuevas publicaciones
                     ropa = self.obtener_publicaciones(
                         By.XPATH,
                         '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]',
@@ -545,6 +554,7 @@ class ScraperFb:
                 )
 
         del self._driver.requests
+        # Guardar algunos datos del tiempo de ejecución del scraper
         self._tiempo.cantidad_real = i - e
         self._tiempo.num_error = e
         log(INFO, f"Se halló {e} errores")
@@ -552,7 +562,6 @@ class ScraperFb:
 
     def guardar_datos(
         self,
-        dataset,
         filetype="Data",
         folder="Data//datos_obtenidos",
         filename="fb_data",
@@ -562,10 +571,8 @@ class ScraperFb:
 
         Parameters
         ----------
-        dataset: dict
-            Conjunto de datos extraídos por el scraper
         filetype: str
-            Indica si la información proviene de los datos o de los errores
+            Indica si la información son datos de las publicaciones o errores. Se acepta Data y Error
         folder: str
             Ruta del archivo
         filename: str
@@ -576,8 +583,27 @@ class ScraperFb:
         None
         """
         log(INFO, f"Guardando {filetype}")
+        # Comprobando si el valor ingresado para la variable filetype es correcto
+        if filetype == "Data":
+            # Registrando toda la información de las publicaciones extraídas por el scraper
+            dataset = self._data.dataset
+        elif filetype == "Error":
+            # Registrando toda la información de los errores ocurridos durante la ejecución del scraper
+            dataset = self._errores.errores
+        else:
+            log(
+                INFO,
+                f"El archivo de tipo {filetype} no está admitido. Solo se aceptan los valores Data y Error",
+            )
+            log(
+                ERROR,
+                f"El archivo de tipo {filetype} no se va a guardar por no ser de tipo Data o Error",
+            )
+            return
+        # Crear un dataframe
         df_fb_mkp_ropa = DataFrame(dataset)
 
+        # Comprobando que el dataset contenga información
         if len(df_fb_mkp_ropa) == 0:
             log(
                 INFO,
@@ -585,21 +611,21 @@ class ScraperFb:
             )
             return
 
+        # Ejecutando diferentes acciones de acuerdo al tipo de información que se va a guardar
         if filetype == "Data":
+            # Eliminando la última publicación, porque su fecha de creación es de otro día
             df_fb_mkp_ropa.drop(len(df_fb_mkp_ropa) - 1, axis=0, inplace=True)
+            # Registrando la cantidad de información que contiene el dataset
             cantidad = len(df_fb_mkp_ropa)
             self._tiempo.cantidad = cantidad
-        elif filetype == "Error":
-            cantidad = self._tiempo.num_error
         else:
-            log(
-                INFO,
-                f"El archivo de tipo {filetype} no está admitido. Solo se aceptan los valores Data y Error",
-            )
-            return
+            # Registrando la cantidad de errores ocurridos durante la ejecución del scraper
+            cantidad = self._tiempo.num_error
 
         datetime_obj = datetime.strptime(self._tiempo.fecha, "%d/%m/%Y")
+        # Generando la ruta donde se va a guardar la información
         filepath = path.join(folder, datetime_obj.strftime("%d-%m-%Y"))
+        # Generando el nombre del archivo que va a contener la información
         filename = (
             filename
             + "_"
@@ -608,8 +634,11 @@ class ScraperFb:
             + str(cantidad)
             + ".xlsx"
         )
+        # Verificando si la ruta donde se va a guardar la información existe
         if not path.exists(filepath):
+            # Creando la ruta donde se va a guardar la información
             makedirs(filepath)
+        # Guardando la información en un archivo de tipo excel
         df_fb_mkp_ropa.to_excel(path.join(filepath, filename), index=False)
         log(INFO, f"{filetype} Guardados Correctamente")
 
@@ -629,24 +658,40 @@ class ScraperFb:
         None
         """
         log(INFO, "Guardando tiempos")
+        # Guardando los parametros finales del tiempo de ejecución del scraper
         self._tiempo.set_param_final()
+        # Variable que indica si el encabezados existe o no en el archivo de excel
         header_exist = True
+        # Verificando si el archivo existe o no
         if path.isfile(filename):
+            # Leendo el archivo
             tiempos = load_workbook(filename)
-            if sheet_name not in [ws.title for ws in tiempos.worksheets]:
-                tiempos.create_sheet(sheet_name)
-                header_exist = False
         else:
+            # Creando un archivo de tipo workbook
             tiempos = Workbook()
+
+        # Comprobando si ya existe un sheet con el nombre indicado en la variable sheet_name
+        if sheet_name not in [ws.title for ws in tiempos.worksheets]:
+            # Creando un nuevo sheet
             tiempos.create_sheet(sheet_name)
+            # Especificar que no existen encabezados en el nuevo sheet
             header_exist = False
+        # Seleccionar el sheet deseado donde se va a guardar la información
         worksheet = tiempos[sheet_name]
+
+        # Comprobando si el encabezados existe o no
         if not header_exist:
+            # Reordenar la lista que contiene los encabezados a ser insertados
             keys = cambiar_posiciones(list(self._tiempo.__dict__.keys())[1:], 0, 1)
+            # Insertando los encabezados al sheet
             worksheet.append(keys)
+        # Reordenar la lista que contiene los valores a ser insertados
         values = cambiar_posiciones(list(self._tiempo.__dict__.values())[1:], 0, 1)
+        # Insertando la información del tiempo al sheet
         worksheet.append(values)
+        # Guardar la información en un archivo excel
         tiempos.save(filename)
+        # Cerrar el archivo excel
         tiempos.close()
         log(INFO, "Tiempos Guardados Correctamente")
 
@@ -659,18 +704,28 @@ def config_log(
         Parameter:
                 log_folder (str): Carpeta donde se va a generar el archivo log
                 log_filename (str): Nombre del archivo log a ser generado
+                log_file_mode (str): Modo de guardado del archivo
+                log_file_encoding (str): Codificación usada para el archivo
                 fecha_actual (datetime): Fecha actual de la creación del archivo log
         Returns:
                 None
     """
+    # Mostrar solo los errores de los registros que maneja selenium
     seleniumLogger.setLevel(ERROR)
+    # Mostrar solo los errores de los registros que maneja urllib
     urllibLogger.setLevel(ERROR)
+    # Mostrar solo los errores de los registros que maneja seleniumwire
     logger = getLogger("seleniumwire")
     logger.setLevel(ERROR)
+    # Generando la ruta donde se va a guardar los registros de ejecución
     log_path = path.join(log_folder, fecha_actual.strftime("%d-%m-%Y"))
+    # Generando el nombre del archivo que va a contener los registros de ejecución
     log_filename = log_filename + "_" + fecha_actual.strftime("%d%m%Y") + ".log"
+    # Verificando si la ruta donde se va a guardar los registros de ejecución existe
     if not path.exists(log_path):
+        # Creando la ruta donde se va a guardar los registros de ejecución
         makedirs(log_path)
+    # Configuración básica de los logs que maneja este programa
     basicConfig(
         format="%(asctime)s %(message)s",
         level=INFO,
@@ -693,10 +748,13 @@ def validar_parametros(parametros):
                None
     """
     for parametro in parametros:
+        # Verifica que el parámetro haya sido definido
         if not parametro:
             log(ERROR, "Parámetros incorrectos")
+            # Retorna false si algunos de los parámetros no fue definido
             return False
     log(INFO, "Parámetros válidos")
+    # Retorna verdadero si todos los parámetros fueron definidos
     return True
 
 
@@ -711,11 +769,12 @@ def cambiar_posiciones(lista, index1, index2):
         Returns:
                list
     """
-    if len(lista) == 0:
-        return []
-    aux = lista[index2]
-    lista[index2] = lista[index1]
-    lista[index1] = aux
+    # Comprobar si la lista contiene valores
+    if len(lista) > 0:
+        # Intercambio de posiciones
+        aux = lista[index2]
+        lista[index2] = lista[index1]
+        lista[index1] = aux
     return lista
 
 
@@ -769,16 +828,15 @@ def main():
         scraper.mapear_datos(url_ropa)
 
         # Guardando la data extraída por el scraper
-        scraper.guardar_datos(scraper.data.dataset, "Data", data_folder, data_filename)
+        scraper.guardar_datos("Data", data_folder, data_filename)
 
         # Guardando los errores extraídos por el scraper
-        scraper.guardar_datos(
-            scraper.errores.errores, "Error", error_folder, error_filename
-        )
+        scraper.guardar_datos("Error", error_folder, error_filename)
 
         # Guardando los tiempos durante la ejecución del scraper
         scraper.guardar_tiempos(filename_tiempos, sheet_tiempos)
         log(INFO, "Programa finalizado")
+
     except Exception as error:
         log(ERROR, f"Error: {error}")
         log(INFO, "Programa ejecutado con fallos")
