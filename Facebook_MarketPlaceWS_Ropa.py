@@ -19,7 +19,7 @@ from traceback import TracebackException
 from dotenv import load_dotenv
 from openpyxl import load_workbook, Workbook
 from pandas import DataFrame
-from seleniumwire import webdriver
+from seleniumwire.webdriver import Chrome, ChromeOptions, DesiredCapabilities
 from seleniumwire.utils import decode
 from selenium.common.exceptions import (
     NoSuchElementException,
@@ -351,16 +351,26 @@ class ScraperFb:
             Fecha en la que se ejecuta el scraper
         """
         log(INFO, "Inicializando scraper")
+        # Instanciar un objeto de la clase Tiempo
         self._tiempo = Tiempo(fecha_actual)
-        chrome_options = webdriver.ChromeOptions()
+
+        # Variable que maneja las opciones de chrome
+        chrome_options = ChromeOptions()
+
+        # Configurar nivel de notificacones de chrome
         prefs = {"profile.default_content_setting_values.notifications": 2}
         chrome_options.add_experimental_option("prefs", prefs)
-        self._driver = webdriver.Chrome(
+
+        # Instanciar un objeto de Chrome WebDriver
+        self._driver = Chrome(
             chrome_options=chrome_options,
             service=Service(ChromeDriverManager().install()),
         )
+        # Instanciar un objeto de la clase WebDriverWait
         self._wait = WebDriverWait(self._driver, 10)
+        # Instanciar un objeto de la clase Errores
         self._errores = Errores()
+        # Instanciar un objeto de la clase Dataset
         self._data = Dataset()
 
     @property
