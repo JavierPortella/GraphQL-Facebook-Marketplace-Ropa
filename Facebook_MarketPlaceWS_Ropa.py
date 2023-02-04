@@ -9,9 +9,9 @@ from logging import (
     INFO,
     log,
     shutdown,
-    StreamHandler
+    StreamHandler,
 )
-from os import getenv, makedirs, path
+from os import environ, getenv, makedirs, path
 from re import findall
 from time import localtime, sleep, strftime, time
 from traceback import TracebackException
@@ -329,7 +329,7 @@ class ScraperFb:
 
     Methods
     -------
-    iniciar_sesion():
+    iniciar_sesion(user_name, user_password):
         Inicia sesión en la página web de facebook usando un usuario y contraseña
     obtener_publicaciones(selector, xpath):
         Retorna una lista de publicaciones visibles en facebook marketplace
@@ -373,13 +373,16 @@ class ScraperFb:
         """Retorna el valor actual del atributo errores"""
         return self._errores
 
-    def iniciar_sesion(self):
+    def iniciar_sesion(self, user_name, user_password):
         """
         Inicia sesión en la página web de facebook usando un usuario y contraseña
 
         Parameters
         ----------
-        None
+        user_name: str
+            Usuario activo de facebook
+        user_password: str
+            Contraseña del usuario activo de facebook
 
         Returns
         -------
@@ -397,8 +400,8 @@ class ScraperFb:
         username.clear()
         password.clear()
         # Mandando valores a los campos de usuario y contraseña
-        username.send_keys(getenv("FB_USERNAME"))
-        password.send_keys(getenv("FB_PASSWORD"))
+        username.send_keys(user_name)
+        password.send_keys(user_password)
         # Dar click en el botón de iniciar sesión
         self._wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[name='login']"))
@@ -718,6 +721,7 @@ def config_log(
     # Mostrar solo los errores de los registros que maneja seleniumwire
     logger = getLogger("seleniumwire")
     logger.setLevel(ERROR)
+    environ["WDM_LOG"] = "0"
     # Generando la ruta donde se va a guardar los registros de ejecución
     log_path = path.join(log_folder, fecha_actual.strftime("%d-%m-%Y"))
     # Generando el nombre del archivo que va a contener los registros de ejecución
@@ -805,6 +809,10 @@ def main():
         error_filename = getenv("ERROR_FILENAME")
         error_folder = getenv("ERROR_FOLDER")
 
+        # Parámetros de inicio de sesión
+        user = getenv("FB_USERNAME")
+        password = getenv("FB_PASSWORD")
+
         # Validar parámetros
         if not validar_parametros(
             [
@@ -815,6 +823,8 @@ def main():
                 sheet_tiempos,
                 error_filename,
                 error_folder,
+                user,
+                password,
             ]
         ):
             return
@@ -823,7 +833,7 @@ def main():
         scraper = ScraperFb(fecha_actual)
 
         # Iniciar sesión
-        scraper.iniciar_sesion()
+        scraper.iniciar_sesion(user, password)
 
         # Extracción de datos
         scraper.mapear_datos(url_ropa)
