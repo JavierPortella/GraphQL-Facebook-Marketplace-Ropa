@@ -19,7 +19,7 @@ from traceback import TracebackException
 from dotenv import load_dotenv
 from openpyxl import load_workbook, Workbook
 from pandas import DataFrame
-from seleniumwire.webdriver import Chrome, ChromeOptions, DesiredCapabilities
+from seleniumwire.webdriver import Chrome, ChromeOptions
 from seleniumwire.utils import decode
 from selenium.common.exceptions import (
     NoSuchElementException,
@@ -243,16 +243,16 @@ class Tiempo:
             Fecha en la que se ejecuta el scraper
         """
         self._start = time()
-        self._hora_inicio = strftime("%H:%M:%S", localtime(self._start))
-        log(INFO, f"Hora de inicio: {self._hora_inicio}")
         self._fecha = fecha_actual.strftime("%d/%m/%Y")
+        self._hora_inicio = strftime("%H:%M:%S", localtime(self._start))
         self._hora_fin = None
-        self._cantidad = None
-        self._cantidad_real = None
+        self._cantidad = 0
+        self._cantidad_real = 0
         self._tiempo = None
         self._productos_por_min = None
         self._productos_por_min_real = None
         self._num_error = None
+        log(INFO, f"Hora de inicio: {self._hora_inicio}")
 
     @property
     def cantidad(self):
@@ -300,12 +300,12 @@ class Tiempo:
         """
         end = time()
         self._hora_fin = strftime("%H:%M:%S", localtime(end))
-        log(INFO, f"Productos Extraídos: {self._cantidad}")
-        log(INFO, f"Hora Fin: {self._hora_fin}")
         total = end - self._start
         self._tiempo = str(timedelta(seconds=total)).split(".")[0]
         self._productos_por_min = round(self._cantidad / (total / 60), 2)
         self._productos_por_min_real = round(self._cantidad_real / (total / 60), 2)
+        log(INFO, f"Productos Extraídos: {self._cantidad}")
+        log(INFO, f"Hora Fin: {self._hora_fin}")
 
 
 class ScraperFb:
@@ -529,14 +529,13 @@ class ScraperFb:
                 ElementNotInteractableException,
                 StaleElementReferenceException,
             ) as error:
-                enlace = None
-                self._errores.agregar_error(error, enlace)
+                self._errores.agregar_error(error, None)
                 e += 1
 
             except (KeyError, JSONDecodeError) as error:
                 self._errores.agregar_error(error, enlace)
-                e += 1
                 self._driver.execute_script("window.history.go(-1)")
+                e += 1
 
             except Exception as error:
                 self._errores.agregar_error(error, enlace)
@@ -680,27 +679,41 @@ class ScraperFb:
         if path.isfile(filename):
             # Leendo el archivo
             tiempos = load_workbook(filename)
+            # Comprobando si ya existe un sheet con el nombre indicado en la variable sheet_name
+            if sheet_name not in [ws.title for ws in tiempos.worksheets]:
+                # Creando un nuevo sheet
+                tiempos.create_sheet(sheet_name)
+                # Especificar que no existen encabezados en el nuevo sheet
+                header_exist = False
         else:
             # Creando un archivo de tipo workbook
             tiempos = Workbook()
-
-        # Comprobando si ya existe un sheet con el nombre indicado en la variable sheet_name
-        if sheet_name not in [ws.title for ws in tiempos.worksheets]:
-            # Creando un nuevo sheet
-            tiempos.create_sheet(sheet_name)
-            # Especificar que no existen encabezados en el nuevo sheet
+            tiempos.worksheets[0].title = sheet_name
             header_exist = False
+
         # Seleccionar el sheet deseado donde se va a guardar la información
         worksheet = tiempos[sheet_name]
 
         # Comprobando si el encabezados existe o no
         if not header_exist:
-            # Reordenar la lista que contiene los encabezados a ser insertados
-            keys = cambiar_posiciones(list(self._tiempo.__dict__.keys())[1:], 0, 1)
+            # Lista que contiene los encabezados a ser insertados
+            keys = [
+                "Fecha",
+                "Hora Inicio",
+                "Hora Fin",
+                "Cantidad",
+                "Cantidad Real",
+                "Tiempo Ejecucion (min)",
+                "Categorias / Minuto",
+                "Categorias / Minuto real",
+                "Errores",
+            ]
+            # Otra forma de indicar los encabezados
+            # keys = self._tiempo.__dict__.keys()[1:]
             # Insertando los encabezados al sheet
             worksheet.append(keys)
-        # Reordenar la lista que contiene los valores a ser insertados
-        values = cambiar_posiciones(list(self._tiempo.__dict__.values())[1:], 0, 1)
+        # Lista que contiene los valores a ser insertados
+        values = self._tiempo.__dict__.values()[1:]
         # Insertando la información del tiempo al sheet
         worksheet.append(values)
         # Guardar la información en un archivo excel
@@ -771,26 +784,6 @@ def validar_parametros(parametros):
     log(INFO, "Parámetros válidos")
     # Retorna verdadero si todos los parámetros fueron definidos
     return True
-
-
-def cambiar_posiciones(lista, index1, index2):
-    """
-    Función que intercambia las posiciones de 2 elementos de un arreglo
-         Parameter:
-                 lista (list): Lista no vacía de elementos
-                 index1 (int): Posición del primer elemento
-                 index2 (int): Posición del segundo elemento
-
-        Returns:
-               list
-    """
-    # Comprobar si la lista contiene valores
-    if len(lista) > 0:
-        # Intercambio de posiciones
-        aux = lista[index2]
-        lista[index2] = lista[index1]
-        lista[index1] = aux
-    return lista
 
 
 def main():
