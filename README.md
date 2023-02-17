@@ -2,7 +2,7 @@
 
 # GraphQL-Facebook-Marketplace-Ropa
 
-Scrape facebook marketplace from any category into a .xlsx file from a previous day, needing a facebook account to perform it.
+Scrape facebook marketplace from any category into a .xlsx file from the current day, needing a facebook account to perform it.
 
 ## Tech Stack
 

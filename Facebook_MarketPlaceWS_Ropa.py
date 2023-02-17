@@ -34,6 +34,8 @@ from selenium.webdriver.support.wait import WebDriverWait
 from urllib3.connectionpool import log as urllibLogger
 from webdriver_manager.chrome import ChromeDriverManager
 
+CURRENT_DATE = datetime.now().date()
+
 
 class Errores:
     """
@@ -49,7 +51,7 @@ class Errores:
     Methods
     -------
     agregar_error(error, enlace):
-        Agrega la información de un error al diccionario de datos errores
+        Agrega la información de un nuevo error al conjunto de datos errores
     """
 
     def __init__(self):
@@ -66,12 +68,12 @@ class Errores:
 
     @property
     def errores(self):
-        """Retorna el valor actual del diccionario de datos errores"""
+        """Retorna el valor actual del atributo errores"""
         return self._errores
 
     def agregar_error(self, error, enlace):
         """
-        Agrega la información de un error al diccionario de datos errores
+        Agrega la información de un nuevo error al conjunto de datos errores
 
         Parameters
         ----------
@@ -103,12 +105,12 @@ class Dataset:
     Attributes
     ----------
     dataset : dict
-        Conjunto de datos que contiene toda información extraída de una categoría de la página de facebook marketplace
+        Conjunto de datos que contiene toda información extraída de las publicaciones de la página de facebook marketplace
 
     Methods
     -------
     agregar_data():
-        Agrega la información de una publicación al diccionario de datos dataset
+        Agrega la información de una publicación al conjunto de datos dataset
     """
 
     def __init__(self):
@@ -145,7 +147,7 @@ class Dataset:
 
     def agregar_data(self, item, fecha_extraccion, enlace):
         """
-        Agrega la información de una publicación al dataset
+        Agrega la información de una publicación al conjunto de datos dataset
 
         Parameters
         ----------
@@ -192,7 +194,7 @@ class Dataset:
         )
         data = item.get("location_text", {})
         if data:
-            data = data.get("text")
+            data = data.get("text", None)
         self._dataset["locacion"].append(data)
         self._dataset["Fecha Extraccion"].append(fecha_extraccion)
         self._dataset["enlace"].append(enlace)
@@ -207,11 +209,11 @@ class Tiempo:
     Attributes
     ----------
     start : float
-        Hora actual en segundos
+        Hora de inicio de la ejecución del scraper en segundos
+    fecha : str
+        Fecha de extracción de las publicaciones en formato %d/%m/%Y
     hora_inicio : str
         Hora de inicio de la ejecución del scraper en formato %H:%M:%S
-    fecha : str
-        Fecha de las publicaciones a extraer en formato %d/%m/%Y
     hora_fin : str
         Hora de término de la ejecución del scraper en formato %H:%M:%S
     cantidad : int
@@ -233,17 +235,10 @@ class Tiempo:
         Establece los parámetros finales cuando se termina de ejecutar el scraper
     """
 
-    def __init__(self, fecha_actual):
-        """
-        Genera todos los atributos para una instancia de la clase Tiempo
-
-        Parameters
-        ----------
-        fecha_actual: str
-            Fecha en la que se ejecuta el scraper
-        """
+    def __init__(self):
+        """Genera todos los atributos para una instancia de la clase Tiempo"""
         self._start = time()
-        self._fecha = fecha_actual.strftime("%d/%m/%Y")
+        self._fecha = CURRENT_DATE.strftime("%d/%m/%Y")
         self._hora_inicio = strftime("%H:%M:%S", localtime(self._start))
         self._hora_fin = None
         self._cantidad = 0
@@ -252,16 +247,15 @@ class Tiempo:
         self._productos_por_min = None
         self._productos_por_min_real = None
         self._num_error = None
-        log(INFO, f"Hora de inicio: {self._hora_inicio}")
 
     @property
     def cantidad(self):
-        """Retorna el valor actual o asigna un nuevo valor del atributo cantidad"""
+        """Retorna el valor actual o actualiza el valor del atributo cantidad"""
         return self._cantidad
 
     @property
     def cantidad_real(self):
-        """Retorna el valor actual o asigna un nuevo valor del atributo cantidad_real"""
+        """Retorna el valor actual o actualiza el valor del atributo cantidad_real"""
         return self._cantidad_real
 
     @property
@@ -270,8 +264,13 @@ class Tiempo:
         return self._fecha
 
     @property
+    def hora_inicio(self):
+        """Retorna el valor actual del atributo hora_inicio"""
+        return self._hora_inicio
+
+    @property
     def num_error(self):
-        """Retorna el valor actual o asigna un nuevo valor del atributo num_error"""
+        """Retorna el valor actual o actualiza el valor del atributo num_error"""
         return self._num_error
 
     @cantidad.setter
@@ -304,6 +303,7 @@ class Tiempo:
         self._tiempo = str(timedelta(seconds=total)).split(".")[0]
         self._productos_por_min = round(self._cantidad / (total / 60), 2)
         self._productos_por_min_real = round(self._cantidad_real / (total / 60), 2)
+        log(INFO, f"Errores encontrados: {self._num_error}")
         log(INFO, f"Productos Extraídos: {self._cantidad}")
         log(INFO, f"Hora Fin: {self._hora_fin}")
 
@@ -341,18 +341,12 @@ class ScraperFb:
         Guarda la información del tiempo de ejecución del scraper
     """
 
-    def __init__(self, fecha_actual):
-        """
-        Genera todos los atributos para una instancia de la clase ScraperFb
-
-        Parameters
-        ----------
-        fecha_actual: str
-            Fecha en la que se ejecuta el scraper
-        """
+    def __init__(self):
+        """Genera todos los atributos para una instancia de la clase ScraperFb"""
         log(INFO, "Inicializando scraper")
         # Instanciar un objeto de la clase Tiempo
-        self._tiempo = Tiempo(fecha_actual)
+        self._tiempo = Tiempo()
+        log(INFO, f"Hora de inicio: {self._tiempo.hora_inicio}")
 
         # Variable que maneja las opciones de chrome
         chrome_options = ChromeOptions()
@@ -360,6 +354,7 @@ class ScraperFb:
         # Configurar nivel de notificacones de chrome
         prefs = {"profile.default_content_setting_values.notifications": 2}
         chrome_options.add_experimental_option("prefs", prefs)
+        chrome_options.add_argument("--disable-gpu")
 
         # Instanciar un objeto de Chrome WebDriver
         self._driver = Chrome(
@@ -416,7 +411,7 @@ class ScraperFb:
         self._wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[name='login']"))
         ).click()
-        sleep(10)
+        sleep(5)
         log(INFO, "Inicio de sesión con éxito")
 
     def obtener_publicaciones(self, selector, xpath):
@@ -453,11 +448,10 @@ class ScraperFb:
         self._driver.execute_script("window.open('about:blank', 'newtab');")
         self._driver.switch_to.window("newtab")
         self._driver.get(url)
-        sleep(8)
 
         log(INFO, "Mapeando Publicaciones")
         ropa = self.obtener_publicaciones(
-            By.XPATH, '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]'
+            By.XPATH, '//img[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]'
         )
 
         log(INFO, "Creando variables")
@@ -465,8 +459,6 @@ class ScraperFb:
         fecha_publicacion = fecha_extraccion = int(
             datetime.strptime(self._tiempo.fecha, "%d/%m/%Y").timestamp()
         )
-        # Entero que hace referencia al día siguiente de la fecha en la que se extrae la información
-        fecha_flag = fecha_extraccion + 86400
         # Cuenta la cantidad de publicaciones que mapea el scraper
         i = 0
         # Cuenta la cantidad de errores ocurridos durante la ejecución del mapeo del scraper
@@ -491,6 +483,7 @@ class ScraperFb:
                     # Validar si la api es de graphql
                     if not request.response or "graphql" not in request.url:
                         continue
+
                     # Obtener la respuesta de la api en bytes
                     body = decode(
                         request.response.body,
@@ -498,9 +491,13 @@ class ScraperFb:
                     )
                     # Decodificar la respuesta a utf-8
                     decoded_body = body.decode("utf-8")
-
                     # Validar si la respuesta decodificada es la deseada
-                    if decoded_body.find('"extensions":{"prefetch_uris_v2"') == -1:
+                    if (
+                        decoded_body.find(
+                            '{"viewer":{"marketplace_product_details_page"'
+                        )
+                        == -1
+                    ):
                         continue
 
                     # Convertir al formato json la respuesta decodificada anteriormente
@@ -510,17 +507,15 @@ class ScraperFb:
                         "marketplace_product_details_page"
                     ]["target"]["creation_time"]
 
-                    # Validar si la fecha de publicación corresponda a la deseada
-                    if fecha_publicacion < fecha_flag:
-                        # Diccionario que contiene toda la información de la publicación
-                        dato = json_data["data"]["viewer"][
-                            "marketplace_product_details_page"
-                        ]["target"]
-                        log(INFO, f"{dato['marketplace_listing_title']}")
-                        self._data.agregar_data(dato, self._tiempo.fecha, enlace)
-                        log(INFO, f"Item {i + 1} scrapeado con éxito")
-
+                    # Diccionario que contiene toda la información de la publicación
+                    dato = json_data["data"]["viewer"][
+                        "marketplace_product_details_page"
+                    ]["target"]
+                    log(INFO, f"{dato['marketplace_listing_title']}")
+                    self._data.agregar_data(dato, self._tiempo.fecha, enlace)
+                    log(INFO, f"Item {i + 1} scrapeado con éxito")
                     break
+
                 # Regresar al inicio donde se encuentran todas las publicaciones de facebook
                 self._driver.execute_script("window.history.go(-1)")
 
@@ -558,7 +553,7 @@ class ScraperFb:
                     # Mapear las nuevas publicaciones
                     ropa = self.obtener_publicaciones(
                         By.XPATH,
-                        '//*[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]',
+                        '//img[@class="xt7dq6l xl1xv1r x6ikm8r x10wlt62 xh8yej3"]',
                     )
                 sleep(2)
                 log(
@@ -570,7 +565,6 @@ class ScraperFb:
         # Guardar algunos datos del tiempo de ejecución del scraper
         self._tiempo.cantidad_real = i - e
         self._tiempo.num_error = e
-        log(INFO, f"Se halló {e} errores")
         log(INFO, "Fin de la extraccion")
 
     def guardar_datos(
@@ -709,11 +703,11 @@ class ScraperFb:
                 "Errores",
             ]
             # Otra forma de indicar los encabezados
-            # keys = self._tiempo.__dict__.keys()[1:]
+            # keys = list(self._tiempo.__dict__.keys())[1:]
             # Insertando los encabezados al sheet
             worksheet.append(keys)
         # Lista que contiene los valores a ser insertados
-        values = self._tiempo.__dict__.values()[1:]
+        values = list(self._tiempo.__dict__.values())[1:]
         # Insertando la información del tiempo al sheet
         worksheet.append(values)
         # Guardar la información en un archivo excel
@@ -723,9 +717,7 @@ class ScraperFb:
         log(INFO, "Tiempos Guardados Correctamente")
 
 
-def config_log(
-    log_folder, log_filename, log_file_mode, log_file_encoding, fecha_actual
-):
+def config_log(log_folder, log_filename, log_file_mode, log_file_encoding):
     """
     Función que configura los logs para rastrear al programa
         Parameter:
@@ -733,7 +725,6 @@ def config_log(
                 log_filename (str): Nombre del archivo log a ser generado
                 log_file_mode (str): Modo de guardado del archivo
                 log_file_encoding (str): Codificación usada para el archivo
-                fecha_actual (datetime): Fecha actual de la creación del archivo log
         Returns:
                 None
     """
@@ -746,9 +737,9 @@ def config_log(
     logger.setLevel(ERROR)
     environ["WDM_LOG"] = "0"
     # Generando la ruta donde se va a guardar los registros de ejecución
-    log_path = path.join(log_folder, fecha_actual.strftime("%d-%m-%Y"))
+    log_path = path.join(log_folder, CURRENT_DATE.strftime("%d-%m-%Y"))
     # Generando el nombre del archivo que va a contener los registros de ejecución
-    log_filename = log_filename + "_" + fecha_actual.strftime("%d%m%Y") + ".log"
+    log_filename = log_filename + "_" + CURRENT_DATE.strftime("%d%m%Y") + ".log"
     # Verificando si la ruta donde se va a guardar los registros de ejecución existe
     if not path.exists(log_path):
         # Creando la ruta donde se va a guardar los registros de ejecución
@@ -789,8 +780,7 @@ def validar_parametros(parametros):
 def main():
     try:
         # Formato para el debugger
-        fecha_actual = datetime.now().date() - timedelta(days=1)
-        config_log("Log", "fb_ropa_log", "w", "utf-8", fecha_actual)
+        config_log("Log", "fb_ropa_log", "w", "utf-8")
         log(INFO, "Configurando Formato Básico del Debugger")
 
         # Cargar variables de entorno
@@ -833,7 +823,7 @@ def main():
             return
 
         # Inicializar scrapper
-        scraper = ScraperFb(fecha_actual)
+        scraper = ScraperFb(CURRENT_DATE)
 
         # Iniciar sesión
         scraper.iniciar_sesion(user, password)
