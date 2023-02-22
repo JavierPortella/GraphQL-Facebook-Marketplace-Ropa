@@ -12,7 +12,7 @@ from logging import (
     StreamHandler,
 )
 from os import environ, getenv, makedirs, path
-from re import findall
+from re import sub
 from time import localtime, sleep, strftime, time
 from traceback import TracebackException
 
@@ -71,7 +71,7 @@ class Errores:
         """Retorna el valor actual del atributo errores"""
         return self._errores
 
-    def agregar_error(self, error, enlace):
+    def agregar_error(self, error, enlace=None):
         """
         Agrega la información de un nuevo error al conjunto de datos errores
 
@@ -468,17 +468,13 @@ class ScraperFb:
                 log(INFO, f"Scrapeando item {i + 1}")
                 # Eliminar de la memoria requests innecesarios
                 del self._driver.requests
-                # Link de la publicación de facebook
-                enlace = findall(
-                    "(.*)\/\?",
-                    ropa[i]
-                    .find_element(By.XPATH, ".//ancestor::a")
-                    .get_attribute("href"),
-                )[0]
                 # Dar click a la publicación de facebook
                 ropa[i].click()
                 sleep(5)
-
+                # Link de la publicación de facebook
+                enlace = sub(
+                    r"\?.+", "", self._driver.execute_script("return document.URL")
+                )
                 for request in self._driver.requests:
                     # Validar si la api es de graphql
                     if not request.response or "graphql" not in request.url:
@@ -502,15 +498,15 @@ class ScraperFb:
 
                     # Convertir al formato json la respuesta decodificada anteriormente
                     json_data = loads(decoded_body)
-                    # Extraer la fecha de publicación
-                    fecha_publicacion = json_data["data"]["viewer"][
-                        "marketplace_product_details_page"
-                    ]["target"]["creation_time"]
 
                     # Diccionario que contiene toda la información de la publicación
                     dato = json_data["data"]["viewer"][
                         "marketplace_product_details_page"
                     ]["target"]
+
+                    # Extraer la fecha de publicación
+                    fecha_publicacion = dato["creation_time"]
+
                     log(INFO, f"{dato['marketplace_listing_title']}")
                     self._data.agregar_data(dato, self._tiempo.fecha, enlace)
                     log(INFO, f"Item {i + 1} scrapeado con éxito")
@@ -823,7 +819,7 @@ def main():
             return
 
         # Inicializar scrapper
-        scraper = ScraperFb(CURRENT_DATE)
+        scraper = ScraperFb()
 
         # Iniciar sesión
         scraper.iniciar_sesion(user, password)
