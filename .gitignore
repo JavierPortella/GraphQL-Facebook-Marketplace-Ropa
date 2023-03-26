@@ -4,6 +4,9 @@
 # Environment File
 .env
 
+# Executables
+*.bat
+
 # Critical Data
 /Data
 /Error
